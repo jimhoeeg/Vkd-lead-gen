@@ -1,6 +1,6 @@
 # Beregninger og antagelser
 
-Alle formler ligger i `js/calc.js` (rene funktioner) og er dækket af tests i `tests/calc.test.mjs` (`node --test tests/calc.test.mjs`).
+Alle formler ligger i `js/calc.js` (rene funktioner) og er dækket af tests i `tests/calc.test.mjs` (`node --test tests/*.test.mjs`).
 Standardværdierne er **eksempler** og skal kalibreres med VikingDanmarks egne tal og prislister før lancering. Alle kan ændres af brugeren i beregnerne.
 
 ## 1. Kvieplan (`heiferBalance`, `recommendStrategy`)

@@ -19,7 +19,7 @@ Svarene gemmes kun i browserens localStorage. "Start forfra" nulstiller demoen.
 ## Test af beregningerne
 
 ```
-node --test tests/calc.test.mjs
+node --test tests/*.test.mjs
 ```
 
 Formler, antagelser og kilder står i [docs/BEREGNINGER.md](docs/BEREGNINGER.md).
@@ -36,3 +36,10 @@ Formler, antagelser og kilder står i [docs/BEREGNINGER.md](docs/BEREGNINGER.md)
 * Kalibrér priser, drægtighedsprocenter og testpris med VikingDanmarks egne tal.
 * Formularen sender ikke data endnu. Kobl `submit` i `js/app.js` til CRM/marketing automation.
 * Tilføj samtykketekst og privatlivspolitik fra VikingDanmark.
+
+## Booking, planlink og opfølgning
+
+* **Find og book din lokale rådgiver** (i "Din plan"): Postnummeret finder rådgiveren. Landmanden vælger besøg, video, telefon eller "ring mig op" og får en kalenderfil (.ics). Rådgiverne og de ledige tider er **eksempeldata** i `js/engage.js` og skal kobles til VikingDanmarks rådgiverliste og kalendere (fx Microsoft Bookings eller Outlook).
+* **Gem min plan:** Beregningerne kodes ind i et link (`#plan=…`), så landmanden kan åbne dem igen. Kontaktoplysninger er aldrig en del af linket.
+* **Opfølgning:** `buildNurture` laver et mailforløb ud fra landmandens resultater: kvieunderskud eller -overskud, genomisk test, NIR timet op til ensilering, klima og et genbesøg efter 3 måneder. Der går mindst 5 dage mellem mails. Planmailen sendes altid. Resten kræver et aktivt, ikke forhåndsafkrydset tilvalg.
+* **Backend:** `api/lead.js` (serverless) sender planmailen og rådgiverbeskeden via Resend med .ics vedhæftet og videresender leadet og opfølgningsplanen til CRM. Den aktiveres med `<body data-api="/api/lead">` og miljøvariablerne beskrevet i filen. Uden `data-api` kører siden i demotilstand og sender intet.

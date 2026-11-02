@@ -232,3 +232,28 @@ tr.total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom:
   body { background: #fff; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+
+/* Booking */
+.advisor { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); margin-bottom: 14px; }
+.avatar { width: 48px; height: 48px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-ink); font-weight: 700; }
+.slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+@media (max-width: 760px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.slot-day { border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+.slot-date { font-size: .8rem; font-weight: 600; color: var(--ink-2); text-transform: capitalize; }
+.slot { font: inherit; font-size: .88rem; padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+.slot:hover { border-color: var(--brand); }
+.slot[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.side-actions { display: grid; gap: 8px; margin-top: 14px; }
+
+/* Tidslinje */
+.timeline { list-style: none; margin: 8px 0; padding: 0; }
+.timeline li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.timeline li:last-child { border-bottom: 0; }
+.timeline .when { font-weight: 600; color: var(--brand); font-variant-numeric: tabular-nums; }
+
+/* Modal + toast */
+.modal { position: fixed; inset: 0; background: rgba(10, 15, 12, .5); z-index: 60; display: grid; place-items: center; padding: 16px; }
+.modal[hidden] { display: none; }
+.modal-panel { background: var(--surface); border-radius: var(--radius); width: min(720px, 100%); max-height: 92vh; display: flex; flex-direction: column; padding: 16px; }
+.modal-panel iframe { flex: 1; width: 100%; min-height: 60vh; border: 1px solid var(--line); border-radius: 10px; background: #f4f2ec; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; z-index: 70; font-size: .9rem; max-width: calc(100% - 32px); box-shadow: var(--shadow); }

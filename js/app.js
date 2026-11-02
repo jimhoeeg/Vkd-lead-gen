@@ -1,7 +1,7 @@
 /* Avlsværktøjet – flow, UI og state. Beregninger ligger i calc.js. */
 (function () {
   'use strict';
-  const C = window.VKCalc, CH = window.VKCharts, D = C.DEFAULTS;
+  const C = window.VKCalc, CH = window.VKCharts, EN = window.VKEngage, D = C.DEFAULTS;
   const deep = (o) => JSON.parse(JSON.stringify(o));
   const $ = (sel, el = document) => el.querySelector(sel);
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -39,8 +39,11 @@
     dm: deep(C.DRYMATTER_DEFAULTS),
     visited: [],
     interests: { plan: true, test: false, nir: false, climate: false },
-    contact: { name: '', farm: '', cvr: '', phone: '', email: '', zip: '', note: '', consent: false },
+    contact: { name: '', farm: '', cvr: '', phone: '', email: '', zip: '', note: '', consent: false, mailOptIn: false },
+    booking: { type: 'visit', slot: null, callbackWhen: 'Formiddag (8-12)' },
     submitted: false,
+    submittedAt: null,
+    restored: false,
   });
   let S;
   try { S = Object.assign(initial(), JSON.parse(localStorage.getItem(KEY) || 'null') || {}); } catch (e) { S = initial(); }
@@ -560,10 +563,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     const r35 = clim.rows.find((r) => r.year === 2035);
     if (S.submitted) return renderThanks(R);
     const c = S.contact;
-    return `<section class="card hero">
+    return `${S.restored ? `<div class="callout good no-print">Velkommen tilbage. Her er din plan, som du gemte den. Du kan justere alle tal i beregnerne.</div>` : ''}
+    <section class="card hero">
       <div class="eyebrow">Din plan</div>
       <h1>Overblik over din besætning</h1>
-      <p class="lead">Her er resultaterne fra beregnerne samlet. Vælg, hvad du vil have hjælp til. Så tager en rådgiver udgangspunkt i dine tal og regner dem igennem sammen med dig.</p>
+      <p class="lead">Her er resultaterne fra beregnerne samlet. Vælg, hvad du vil have hjælp til, og book din lokale rådgiver. Rådgiveren har dine tal med til mødet.</p>
+      <div class="btn-row no-print" style="justify-content:flex-start"><button class="btn btn-ghost" data-action="copy-link">🔗 Gem link til min plan</button><button class="btn btn-ghost" data-action="print">Udskriv / gem som PDF</button></div>
     </section>
     <section class="card">
       <div class="grid-2">
@@ -580,6 +585,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       ${checkbox('climate', 'Klimaprofil for besætningen', 'Hvordan metan og Saved Feed kan vægtes i dit tyrevalg.')}
       ${checkbox('nir', 'Demo af NIR-tørstofmåling', 'På blandevogn eller finsnitter.')}
     </section>
+    <section class="card" id="booking">
+      <h2>Book din lokale rådgiver</h2>
+      <p class="muted small">Skriv bedriftens postnummer. Så finder vi rådgiveren i dit område og viser ledige tider.</p>
+      <div class="field" style="max-width:220px"><label for="c-zip"><span>Postnummer</span></label><input id="c-zip" type="text" inputmode="numeric" maxlength="4" autocomplete="postal-code" value="${esc(c.zip)}" data-contact="zip"></div>
+      <div id="bookingBody">${bookingBody()}</div>
+    </section>
     <section class="card">
       <h2>Dine kontaktoplysninger</h2>
       <form id="leadForm" novalidate>
@@ -588,32 +599,135 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
           ${input('farm', 'Bedrift', 'text', 'organization')}
           ${input('phone', 'Telefon', 'tel', 'tel', true)}
           ${input('email', 'E-mail', 'email', 'email', true)}
-          ${input('zip', 'Postnummer', 'text', 'postal-code')}
           ${input('cvr', 'CVR-nr. (valgfrit)', 'text', 'off')}
         </div>
         <div class="field"><label for="c-note"><span>Bemærkning (valgfrit)</span></label><textarea id="c-note" rows="3" data-contact="note">${esc(c.note)}</textarea></div>
-        <label class="check"><input type="checkbox" id="c-consent" data-contact="consent" ${c.consent ? 'checked' : ''}><span class="small">Jeg giver samtykke til, at VikingDanmark kontakter mig om ovenstående og må gemme mine svar og beregninger til det formål.</span></label>
+        <label class="check"><input type="checkbox" id="c-consent" data-contact="consent" ${c.consent ? 'checked' : ''}><span class="small">Jeg giver samtykke til, at VikingDanmark kontakter mig om ovenstående og må gemme mine svar og beregninger til det formål. *</span></label>
+        <label class="check"><input type="checkbox" id="c-mailOptIn" data-contact="mailOptIn" ${c.mailOptIn ? 'checked' : ''}><span class="small">Send mig også gode råd, der passer til mine tal. Højst én mail om ugen, og du kan altid afmelde. <span class="muted">(Valgfrit. Planen sendes under alle omstændigheder.)</span></span></label>
         <div id="formError" class="callout bad" hidden></div>
-        <div class="btn-row"><button class="btn btn-ghost" type="button" data-action="print">Udskriv / gem som PDF</button><button class="btn btn-primary" type="submit">Send til en rådgiver →</button></div>
+        <div class="btn-row"><button class="btn btn-ghost" type="button" data-action="preview-mail" data-id="plan">Se mailen, du får</button><button class="btn btn-primary" type="submit">${S.booking.slot ? 'Bekræft møde og send min plan →' : S.booking.type === 'callback' ? 'Send – ring mig op →' : 'Send til en rådgiver →'}</button></div>
       </form>
     </section>`;
   }
+
+  function bookingBody() {
+    const adv = EN.advisorForZip(S.contact.zip);
+    if (!adv) {
+      return S.contact.zip && String(S.contact.zip).length === 4
+        ? '<p class="callout bad">Vi kunne ikke finde postnummeret. Tjek, at det er et dansk postnummer.</p>'
+        : '<p class="muted small">Ingen rådgiver valgt endnu.</p>';
+    }
+    const b = S.booking;
+    const types = [...Object.entries(EN.MEETING_TYPES).map(([k, m]) => [k, `${m.label} · ${m.minutes} min`]), ['callback', 'Ring mig op']];
+    let slots = '';
+    if (b.type === 'callback') {
+      slots = `<div class="field" style="max-width:320px;margin-top:12px"><label for="cbWhen"><span>Hvornår passer det bedst?</span></label>
+        <select id="cbWhen" data-booking="callbackWhen">${['Formiddag (8-12)', 'Eftermiddag (12-16)', 'Efter malkning (16-18)'].map((o) => `<option ${b.callbackWhen === o ? 'selected' : ''}>${o}</option>`).join('')}</select>
+        <div class="help">Rådgiveren ringer inden for 2 hverdage.</div></div>`;
+    } else {
+      const days = EN.availableSlots(adv.id, b.type, new Date(), 8);
+      slots = `<div class="slots" role="group" aria-label="Ledige tider">${days.map((d) => `<div class="slot-day"><div class="slot-date">${esc(EN.fmtDate(d.date).replace(/^(\w+)/, (w) => w.slice(0, 3) + '.'))}</div>${d.times.length ? d.times.map((t) => {
+        const sel = b.slot && b.slot.date === d.date && b.slot.time === t && b.slot.type === b.type;
+        return `<button type="button" class="slot" data-action="book-slot" data-date="${d.date}" data-time="${t}" aria-pressed="${sel}">${t}</button>`;
+      }).join('') : '<span class="muted small">Optaget</span>'}</div>`).join('')}</div>`;
+    }
+    const chosen = b.slot && b.slot.type === b.type && b.type !== 'callback'
+      ? `<div class="callout good"><b>Valgt:</b> ${esc(EN.MEETING_TYPES[b.slot.type].label)}, ${esc(EN.fmtDate(b.slot.date))} kl. ${esc(b.slot.time)}. Udfyld dine oplysninger nedenfor for at bekræfte.</div>` : '';
+    return `<div class="advisor">
+        <div class="avatar" aria-hidden="true">${esc(adv.initials)}</div>
+        <div><b>${esc(adv.title)}</b><br><span class="small muted">Dækker ${esc(adv.region)} · Eksempeldata, erstattes af VikingDanmarks rådgiverliste</span></div>
+      </div>
+      <div class="field"><div class="lbl">Mødeform</div>
+        <div class="seg" role="group" aria-label="Mødeform">${types.map(([k, t]) => `<button type="button" data-action="book-type" data-value="${k}" aria-pressed="${b.type === k}">${t}</button>`).join('')}</div></div>
+      ${slots}${chosen}`;
+  }
+
   const planItem = (step, title, a, b) => `<div class="stat"><div class="k">${title}</div><div style="font-weight:600;margin:4px 0">${a}</div><div class="s">${b}</div><button class="linkbtn small no-print" data-action="goto" data-step="${step}">Justér</button></div>`;
   const checkbox = (k, t, s) => `<label class="check"><input type="checkbox" data-interest="${k}" ${S.interests[k] ? 'checked' : ''}><span><b>${t}</b><br><span class="small muted">${s}</span></span></label>`;
   const input = (k, label, type, ac, req = false) => `<div class="field"><label for="c-${k}"><span>${label}${req ? ' *' : ''}</span></label><input id="c-${k}" type="${type}" autocomplete="${ac}" value="${esc(S.contact[k])}" data-contact="${k}" ${req ? 'required' : ''}></div>`;
 
-  function renderThanks() {
+  // ---------------------------------------------------------------- planlink, mails, booking
+  const baseUrl = () => location.href.split('#')[0];
+  const planUrl = () => `${baseUrl()}#plan=${EN.encodePlan(S)}`;
+  function nurtureCtx(R) {
+    const a = S.quiz.answers;
+    const adv = EN.advisorForZip(S.contact.zip);
+    const slot = S.booking.slot && S.booking.slot.type === S.booking.type ? S.booking.slot : null;
+    return {
+      now: S.submittedAt ? new Date(S.submittedAt) : new Date(),
+      name: S.contact.name, cows: S.herd.cows, mailOptIn: !!S.contact.mailOptIn,
+      heiferBalance: R.orig.balance, need: R.orig.need, potential: R.potential,
+      genomicNet: R.gs.genomic.net, genomicTested: R.gs.genomic.tested,
+      tax2030: R.clim.rows[0].taxBase, tax2035: R.clim.rows[5].taxBase, drySaving: R.dm.savingWithNIR,
+      dmMethod: S.dm.method, focus: a.focus, genomicAnswer: a.genomic, interests: S.interests,
+      advisor: adv, planUrl: planUrl(), bookUrl: `${planUrl()}`,
+      booking: slot ? { slot, typeLabel: EN.MEETING_TYPES[slot.type].label } : null,
+    };
+  }
+  function downloadICS() {
+    const adv = EN.advisorForZip(S.contact.zip);
+    const s = S.booking.slot;
+    if (!adv || !s) return;
+    const topics = [['plan', 'avlsplan og kvieplan'], ['test', 'genomisk test'], ['climate', 'klimaprofil'], ['nir', 'NIR-tørstofmåling']].filter(([k]) => S.interests[k]).map(([, t]) => t);
+    const ics = EN.buildICS({ date: s.date, time: s.time, type: s.type, advisor: adv,
+      summary: `${EN.MEETING_TYPES[s.type].label}: ${topics[0] || 'avlsplan'} (VikingDanmark)`,
+      description: `Emner: ${topics.join(', ') || 'avlsplan'}.\nDin plan: ${planUrl()}` });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+    a.download = 'moede-med-raadgiver.ics';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+  async function copyPlanLink() {
+    const url = planUrl();
+    try { await navigator.clipboard.writeText(url); toast('Link til din plan er kopieret. Gem det, eller send det til dig selv.'); }
+    catch (e) { window.prompt('Kopiér linket til din plan:', url); }
+  }
+  function previewMail(id) {
+    const R = results();
+    const ctx = nurtureCtx(R);
+    const nm = EN.buildNurture(ctx).find((x) => x.id === 'nir');
+    ctx.nirSeasonal = !!(nm && nm.seasonal);
+    const { subject, html } = EN.renderEmail(id, ctx);
+    $('#modalTitle').textContent = `Mail: ${subject}`;
+    $('#modalFrame').srcdoc = html;
+    $('#modal').hidden = false;
+    $('#closeModal').focus();
+  }
+
+  function renderThanks(R) {
+    const adv = EN.advisorForZip(S.contact.zip);
+    const slot = S.booking.slot && S.booking.slot.type === S.booking.type ? S.booking.slot : null;
+    const nurture = EN.buildNurture(nurtureCtx(R));
+    const dfmt = (d) => new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'short' }).format(d);
+    let booking;
+    if (slot && adv) booking = `<div class="callout good"><b>Dit møde er booket:</b> ${esc(EN.MEETING_TYPES[slot.type].label)} med ${esc(adv.title)}, ${esc(EN.fmtDate(slot.date))} kl. ${esc(slot.time)} (${EN.MEETING_TYPES[slot.type].minutes} min.).</div>
+      <div class="btn-row" style="justify-content:flex-start"><button class="btn btn-primary" data-action="ics">📅 Tilføj til kalender</button></div>`;
+    else if (S.booking.type === 'callback' && adv) booking = `<div class="callout good"><b>${esc(adv.title)}</b> ringer til dig inden for 2 hverdage (${esc(S.booking.callbackWhen)}).</div>`;
+    else booking = `<p>En rådgiver kontakter dig inden for 2 hverdage og har dine beregninger med.</p>`;
     return `<section class="card hero">
       <div class="eyebrow">Tak, ${esc(S.contact.name.split(' ')[0])}</div>
       <h1>Din plan er sendt</h1>
-      <p class="lead">En rådgiver kontakter dig inden for 2 hverdage og har dine beregninger med. Du kan altid gå tilbage og justere tallene.</p>
-      <div class="btn-row" style="justify-content:flex-start">
-        <button class="btn btn-primary" data-action="print">Udskriv / gem din plan</button>
-        <button class="btn btn-ghost" data-action="edit-plan">Ret oplysninger</button>
+      ${booking}
+    </section>
+    <section class="card">
+      <h2>Gem din plan</h2>
+      <p class="small muted">Med linket kan du åbne dine beregninger igen og justere dem. Det indeholder ikke dine kontaktoplysninger. Det står også i mailen, vi har sendt til ${esc(S.contact.email)}.</p>
+      <div class="inline-num" style="flex-wrap:wrap"><input type="text" readonly value="${esc(planUrl())}" aria-label="Link til din plan" style="flex:1;min-width:0;max-width:none" onclick="this.select()"><button class="btn btn-ghost" data-action="copy-link">Kopiér</button></div>
+      <div class="btn-row" style="justify-content:flex-start"><button class="btn btn-ghost" data-action="print">Udskriv / gem som PDF</button><button class="btn btn-ghost" data-action="preview-mail" data-id="plan">Se mailen</button></div>
+    </section>
+    <section class="card">
+      <h2>Det kan du forvente fra os</h2>
+      <ol class="timeline">${nurture.map((m) => `<li><span class="when">${m.id === 'plan' ? 'Nu' : dfmt(m.at)}</span><span><b>${esc(m.subject)}</b><br><span class="small muted">${esc(m.reason)}</span> <button class="linkbtn small" data-action="preview-mail" data-id="${m.id}">Se mail</button></span></li>`).join('')}</ol>
+      ${!S.contact.mailOptIn ? '<p class="small muted">Du har kun bedt om planen. Du får ingen yderligere mails.</p>' : ''}
+      <div class="btn-row no-print" style="justify-content:flex-start">
+        <button class="btn btn-ghost" data-action="edit-plan">Ret oplysninger eller tid</button>
         <button class="btn btn-ghost" data-action="reset">Start forfra (ny demo)</button>
       </div>
-    </section>
-    <section class="card no-print"><p class="small muted">Demo: Åbn <b>leadkortet</b> nederst på siden for at se, hvad VikingDanmark modtager.</p></section>`;
+    </section>`;
   }
 
   // ---------------------------------------------------------------- sidebar og leadkort
@@ -633,19 +747,26 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       <div class="side-row"><span>Klimaafgift 2035</span><span>${kr(R.clim.rows[5].taxBase)}</span></div>
       <div class="side-row"><span>Tørstof, mulig gevinst</span><span class="pos">${kr(Math.max(0, R.dm.savingWithNIR))}</span></div>
       <div style="margin-top:12px" class="small muted">Beregnere gennemgået: ${done} af 4</div>
-      <div class="meter" style="margin-top:4px"><span style="width:${done * 25}%"></span></div>`;
+      <div class="meter" style="margin-top:4px"><span style="width:${done * 25}%"></span></div>
+      <div class="side-actions">
+        <button class="btn btn-ghost" style="width:100%;justify-content:center" data-action="copy-link">🔗 Gem link til min plan</button>
+        ${S.step !== 5 ? `<button class="btn btn-primary" style="width:100%;justify-content:center" data-action="goto-book">Book en rådgiver</button>` : ''}
+      </div>`;
     renderLeadCard(R);
   }
 
-  function renderLeadCard(R) {
+  function leadData(R) {
     const a = S.quiz.answers;
+    const slot = S.booking.slot && S.booking.slot.type === S.booking.type ? S.booking.slot : null;
+    const adv = EN.advisorForZip(S.contact.zip);
     const ls = C.leadScore({
       cows: S.herd.cows, heiferBalancePct: R.orig.balancePct, genomicNet: R.gs.genomic.net,
-      drySaving: R.dm.savingWithNIR, toolsCompleted: S.visited.filter((x) => x >= 1 && x <= 4).length,
+      drySaving: R.dm.savingWithNIR, toolsCompleted: S.visited.filter((x) => x >= 1 && x <= 4).length + (slot ? 1 : 0),
       wantsContact: S.submitted, quizAnswers: a,
     });
     const tags = [];
     if (S.quiz.done) tags.push(AREAS[quizScores(a).top[0]].profile);
+    if (slot) tags.push('Møde booket'); else if (S.booking.type === 'callback' && S.submitted) tags.push('Ønsker opkald');
     if (R.orig.balance < -0.5) tags.push('Mangler kvier'); else if (R.orig.balancePct > 0.05) tags.push('Kvieoverskud');
     if (S.originalStrategy) tags.push('Har valgt anbefalet kvieplan');
     if (a.genomic === 'no') tags.push('Genomtester ikke');
@@ -658,9 +779,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     if (S.interests.climate) actions.push(`Klimaprofil: afgift 2035 ca. ${kr(R.clim.rows[5].taxBase)}`);
     if (S.interests.nir) actions.push(`Foderteknik: NIR-demo. Mulig gevinst ${kr(Math.max(0, R.dm.savingWithNIR))} pr. år.`);
     const c = S.contact;
-    const tierCls = ls.tier === 'Varm' ? 'hot' : ls.tier === 'Lun' ? 'warm' : '';
+    const nurture = EN.buildNurture(nurtureCtx(R));
     const payload = {
-      kontakt: { navn: c.name, bedrift: c.farm, telefon: c.phone, email: c.email, postnr: c.zip, cvr: c.cvr, samtykke: c.consent },
+      kontakt: { navn: c.name, bedrift: c.farm, telefon: c.phone, email: c.email, postnr: c.zip, cvr: c.cvr, samtykke: c.consent, mail_optin: !!c.mailOptIn, bemaerkning: c.note },
+      raadgiver: adv ? adv.id : null,
+      booking: slot ? { type: slot.type, dato: slot.date, tid: slot.time, minutter: EN.MEETING_TYPES[slot.type].minutes }
+        : S.booking.type === 'callback' ? { type: 'callback', tidspunkt: S.booking.callbackWhen } : null,
       besaetning: { aarskoeer: S.herd.cows, race: S.breed, udskiftning: S.herd.replacementRate, kaelvningsinterval: S.herd.calvingIntervalMonths },
       quiz: a, strategi_i_dag: S.originalStrategy || S.strategy, valgt_strategi: S.strategy,
       resultater: {
@@ -669,14 +793,29 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
         toerstof_gevinst_kr: Math.round(Math.max(0, R.dm.savingWithNIR)), toerstof_maalemetode: S.dm.method,
       },
       interesser: Object.keys(S.interests).filter((k) => S.interests[k]),
-      leadscore: ls,
+      leadscore: ls, tags,
+      plan_url: planUrl(),
+      opfoelgning: nurture.map((m) => ({ id: m.id, dato: m.at.toISOString().slice(0, 10), emne: m.subject })),
     };
+    return { ls, tags, actions, payload, nurture, slot, adv };
+  }
+
+  function renderLeadCard(R) {
+    const { ls, tags, actions, payload, nurture, slot, adv } = leadData(R);
+    const c = S.contact;
+    const tierCls = ls.tier === 'Varm' ? 'hot' : ls.tier === 'Lun' ? 'warm' : '';
+    const dfmt = (d) => new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'short' }).format(d);
     $('#leadCard').innerHTML = `<div class="leadcard">
-      <div class="score"><div class="score-num">${ls.score}</div><div><b>${esc(c.name) || 'Anonym besøgende'}</b><br><span class="small muted">${esc(c.farm) || '–'} · ${num(S.herd.cows)} årskøer</span><br><span class="tag ${tierCls}">${ls.tier} lead</span></div></div>
+      <div class="score"><div class="score-num">${ls.score}</div><div><b>${esc(c.name) || 'Anonym besøgende'}</b><br><span class="small muted">${esc(c.farm) || '–'} · ${num(S.herd.cows)} årskøer${c.zip ? ' · ' + esc(c.zip) : ''}</span><br><span class="tag ${tierCls}">${ls.tier} lead</span></div></div>
       <div class="small muted">Point: størrelse ${ls.parts.size}/30 · behov ${ls.parts.need}/40 · engagement ${ls.parts.eng}/30</div>
       <div style="margin:10px 0">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <h3>Tildelt</h3>
+      <p class="small">${adv ? `${esc(adv.title)}` : '<span class="muted">Ikke tildelt (mangler postnummer)</span>'}${slot ? `<br><b>Møde:</b> ${esc(EN.MEETING_TYPES[slot.type].label)}, ${esc(EN.fmtDate(slot.date))} kl. ${esc(slot.time)}` : S.booking.type === 'callback' ? `<br><b>Opkald:</b> ${esc(S.booking.callbackWhen)}` : ''}</p>
       <h3>Næste skridt for rådgiver</h3>
       ${actions.length ? `<ul class="small">${actions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="small muted">Ingen interesser valgt endnu.</p>'}
+      <h3>Automatisk opfølgning</h3>
+      <ol class="timeline small">${nurture.map((m) => `<li><span class="when">${m.id === 'plan' ? 'Dag 0' : dfmt(m.at)}</span><span>${esc(m.subject)} <button class="linkbtn" data-action="preview-mail" data-id="${m.id}">vis</button><br><span class="muted">${esc(m.reason)}</span></span></li>`).join('')}</ol>
+      ${!c.mailOptIn ? '<p class="small muted">Kun planmail. Brugeren har ikke sagt ja til opfølgning.</p>' : ''}
       <details class="learn"><summary>Data til CRM (JSON)</summary><div class="body"><div class="formula" style="white-space:pre-wrap">${esc(JSON.stringify(payload, null, 2))}</div></div></details>
       <p class="small muted">${S.submitted ? 'Status: sendt af brugeren.' : 'Status: ikke sendt endnu. Leadet kan stadig opsamles anonymt til retargeting.'}</p>
     </div>`;
@@ -739,13 +878,26 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       update();
       return;
     }
-    if (t.dataset.contact) { S.contact[t.dataset.contact] = t.type === 'checkbox' ? t.checked : t.value; renderLeadCard(results()); save(); }
+    if (t.dataset.contact) {
+      const k = t.dataset.contact;
+      if (k === 'zip') t.value = t.value.replace(/\D/g, '').slice(0, 4);
+      const before = k === 'zip' ? EN.advisorForZip(S.contact.zip) : null;
+      S.contact[k] = t.type === 'checkbox' ? t.checked : t.value;
+      if (k === 'zip') {
+        const after = EN.advisorForZip(S.contact.zip);
+        if ((before && before.id) !== (after && after.id)) S.booking.slot = null;
+        $('#bookingBody').innerHTML = bookingBody();
+      }
+      if (k === 'mailOptIn' || k === 'consent') { /* ingen re-render nødvendig */ }
+      renderLeadCard(results()); save();
+    }
   });
 
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset.interest) { S.interests[t.dataset.interest] = t.checked; renderLeadCard(results()); save(); }
     if (t.dataset.action === 'lasting') { S.lasting = t.checked; update(); }
+    if (t.dataset.booking) { S.booking[t.dataset.booking] = t.value; renderLeadCard(results()); save(); }
   });
 
   document.addEventListener('click', (e) => {
@@ -772,6 +924,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     } else if (a === 'breed') { S.breed = b.dataset.value; S.genomic.krPerNTMYear = C.NTM_VALUE_BY_BREED[S.breed]; go(2); }
     else if (a === 'dm-method') { S.dm.method = b.dataset.value; b.parentElement.querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', o === b)); update(); }
     else if (a === 'print') window.print();
+    else if (a === 'book-type') { S.booking.type = b.dataset.value; if (S.booking.slot && S.booking.slot.type !== S.booking.type) S.booking.slot = null; $('#bookingBody').innerHTML = bookingBody(); refreshSubmitLabel(); renderLeadCard(results()); save(); }
+    else if (a === 'book-slot') { S.booking.slot = { date: b.dataset.date, time: b.dataset.time, type: S.booking.type }; $('#bookingBody').innerHTML = bookingBody(); refreshSubmitLabel(); renderLeadCard(results()); save(); }
+    else if (a === 'goto-book') { go(5); setTimeout(() => { const el = $('#booking'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60); }
+    else if (a === 'ics') downloadICS();
+    else if (a === 'copy-link') copyPlanLink();
+    else if (a === 'preview-mail') previewMail(b.dataset.id);
     else if (a === 'edit-plan') { S.submitted = false; go(5); }
     else if (a === 'reset') { S = initial(); save(); go(0); }
   });
@@ -792,9 +950,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     if (!/^[+\d][\d\s]{7,}$/.test(c.phone.trim())) errs.push('telefonnummer');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email.trim())) errs.push('e-mail');
     if (!c.consent) errs.push('samtykke');
+    if ((S.booking.slot || S.booking.type === 'callback') && !EN.advisorForZip(c.zip)) errs.push('postnummer (for at booke rådgiver)');
     const box = $('#formError');
     if (errs.length) { box.hidden = false; box.textContent = `Udfyld venligst: ${errs.join(', ')}.`; return; }
     S.submitted = true;
+    S.submittedAt = new Date().toISOString();
+    sendLead();
     // I produktion: POST payload til CRM/marketing automation her.
     go(5);
   });
@@ -822,5 +983,39 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
   drawer.addEventListener('click', (e) => { if (e.target === drawer) drawer.hidden = true; });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') drawer.hidden = true; });
 
+  // Send leadet til backend, hvis siden er konfigureret med data-api (se api/lead.js)
+  function sendLead() {
+    const api = document.body.dataset.api;
+    if (!api) return; // demo-tilstand: intet sendes
+    const R = results();
+    const { payload } = leadData(R);
+    const ctx = nurtureCtx(R);
+    fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead: payload, mailContext: { ...ctx, now: undefined } }) })
+      .catch(() => { /* lead ligger stadig lokalt; kan gensendes */ });
+  }
+  function refreshSubmitLabel() {
+    const btn = document.querySelector('#leadForm button[type=submit]');
+    if (btn) btn.textContent = S.booking.slot && S.booking.slot.type === S.booking.type ? 'Bekræft møde og send min plan →' : S.booking.type === 'callback' ? 'Send – ring mig op →' : 'Send til en rådgiver →';
+  }
+
+  // Modal (mail-forhåndsvisning)
+  $('#closeModal').addEventListener('click', () => { $('#modal').hidden = true; });
+  $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') $('#modal').hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#modal').hidden = true; });
+
+  // Åbnet fra et gemt planlink?
+  const m = location.hash.match(/^#plan=([A-Za-z0-9_-]+)/);
+  if (m) {
+    const p = EN.decodePlan(m[1]);
+    if (p) {
+      Object.assign(S, p);
+      S.quiz = Object.assign({ i: 0, answers: {}, done: true }, p.quiz || {});
+      S.submitted = false; S.restored = true; S.step = 5;
+      S.visited = [0, 1, 2, 3, 4];
+      history.replaceState(null, '', baseUrl());
+    }
+  }
   go(S.step || 0);
+  S.restored = false;
+  save();
 })();

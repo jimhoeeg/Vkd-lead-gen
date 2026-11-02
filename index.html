@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
+<body data-api="">
   <a class="skip" href="#main">Spring til indhold</a>
   <header class="topbar">
     <div class="topbar-inner">
@@ -53,10 +53,20 @@
     </div>
   </div>
 
+  <div class="modal" id="modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="drawer-head"><h2 id="modalTitle" style="font-size:1.1rem">Mail</h2><button class="iconbtn" id="closeModal" type="button" aria-label="Luk">✕</button></div>
+      <p class="small muted">Forhåndsvisning af mailen med dine tal. Prototypen sender ikke mails, før backend er koblet på.</p>
+      <iframe id="modalFrame" title="Forhåndsvisning af mail" sandbox=""></iframe>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
   <div class="tooltip" id="tooltip" role="status" hidden></div>
 
   <script src="js/calc.js"></script>
   <script src="js/charts.js"></script>
+  <script src="js/engage.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

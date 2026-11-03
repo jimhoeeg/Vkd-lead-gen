@@ -42,6 +42,14 @@ testudgift                 = alle kviekalve × testpris
 
 Resultat med standardværdierne: Avlsfremgangen dækker ca. 97 % af testprisen, og nulpunktet ligger ved ca. 195 kr./test. Det betyder, at testen betaler sig ved lav udskiftning og kort kælvningsinterval. Ekstra selektionsrum betaler sig ikke, så længe en krydsningskalv er mere værd end en kviekalv. Det stemmer med fagkilderne: Testen har kun værdi sammen med kønssorteret sæd og kødkvæg.
 
+### 2b. "Hvem skal have kønssorteret?" (`selectionAccuracy`)
+
+20 kviekalve simuleres med en sand avlsværdi (σ = 10 NTM) og to skøn med korrelation r_PA = 0,55 (afstamning) og r_G = 0,80 (genomisk) til den sande værdi: `skøn = r·sand + √(1−r²)·σ·støj`. De k bedste ifølge hvert skøn får kønssorteret sæd, og resten får kødkvæg. k er andelen fra kvieplanen. Beregneren tæller, hvor mange af de k sande bedste der vælges. Tallene er et gennemsnit over 2.000 simulerede hold. Det viste hold er det, der ligger tættest på gennemsnittet. Ved en andel på 50 % vælger man ca. 6,8 af 10 rigtige uden test og 7,9 af 10 med test.
+
+### 2c. Arla klimapoint (`arlaClimateValue`)
+
+Værdi pr. år = årskøer × leveret mælk pr. ko (kg) × tillæg (øre/kg) ÷ 100. Satsen indtastes af brugeren, fordi den ikke er kendt endnu. Ved 0 regnes der ikke med den. Beregneren viser også, hvor højt tillægget mindst skal være, før testen tjener sig hjem: `(testudgift − avlsværdi) ÷ (køer × kg mælk) × 100`. Standardværdier for mælk pr. ko efter race: Holstein 11.000, RDM 10.000, Jersey 8.000 og krydsning 10.000 kg (eksempler).
+
 ## 3. Klima og foder via avl (`climateProjection`)
 
 * Afgift (Grøn Trepart): 300 kr./t CO₂e i 2030, lineært stigende til 750 kr./t i 2035 og derefter fast. Bundfradraget på 60 % giver effektivt 120 og 300 kr./t.

@@ -23,7 +23,21 @@
           <div class="brand-sub">Beregnere til din besætning</div>
         </div>
       </div>
-      <span class="proto-badge" title="Konceptprototype – ikke officielt materiale">Konceptprototype · VikingDanmark</span>
+      <div class="top-actions">
+        <details class="demo-menu" id="demoMenu">
+          <summary>Demo-bedrifter</summary>
+          <div class="demo-list">
+            <p class="small muted">Fiktive bedrifter til præsentation. Indlæser tal og svar.</p>
+            <button type="button" data-action="persona" data-value="jersey"><b>Jersey · 180 køer</b><span>Mangler kvier, genomtester ikke</span></button>
+            <button type="button" data-action="persona" data-value="holstein"><b>Holstein · 600 køer</b><span>Kvieoverskud, ingen tørstofmåling</span></button>
+            <button type="button" data-action="persona" data-value="rdm"><b>Rød Dansk · 120 køer</b><span>Klimafokus, genomtester alle</span></button>
+            <hr>
+            <button type="button" data-action="entry-news"><b>Indgang fra nyhed</b><span>"Klimapoint for genomisk test" → genomik</span></button>
+          </div>
+        </details>
+        <button type="button" class="journey-btn" id="toggleJourney" data-action="journey-toggle" aria-pressed="false">Vis kunderejsen</button>
+        <span class="proto-badge" title="Konceptprototype – ikke officielt materiale">Konceptprototype · VikingDanmark</span>
+      </div>
     </div>
     <nav class="stepper" aria-label="Trin">
       <ol id="stepper"></ol>
@@ -41,6 +55,8 @@
     <p>Prototype til demonstration. Alle standardværdier er eksempler og skal kalibreres med VikingDanmarks egne tal. Beregningerne er dokumenteret i <code>docs/BEREGNINGER.md</code>.</p>
     <button class="linkbtn" id="toggleLead" type="button">Vis leadkort (demo for VikingDanmark)</button>
   </footer>
+
+  <aside class="journey" id="journey" aria-label="Kunderejsen" hidden></aside>
 
   <div class="drawer" id="leadDrawer" hidden>
     <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="leadDrawerTitle">

@@ -143,3 +143,35 @@ test('udskriv nøgletal for standardbesætning (til dokumentation)', () => {
     toerstof: { nu: Math.round(dm.current.perYear), nir: Math.round(dm.byMethod.nir.perYear), besparelse: Math.round(dm.savingWithNIR) },
   }, null, 1));
 });
+
+
+test('simulerede skøn har den ønskede korrelation til sand værdi', () => {
+  const xs = C.simulateCalves(20000, 0.55, 0.8, 10, 42);
+  const corr = (a, b) => {
+    const n = a.length, ma = a.reduce((x, y) => x + y) / n, mb = b.reduce((x, y) => x + y) / n;
+    let sab = 0, saa = 0, sbb = 0;
+    for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; }
+    return sab / Math.sqrt(saa * sbb);
+  };
+  close(corr(xs.map((c) => c.pa), xs.map((c) => c.true)), 0.55, 0.02);
+  close(corr(xs.map((c) => c.g), xs.map((c) => c.true)), 0.80, 0.02);
+});
+
+test('genomisk test vælger flere rigtige og et bedre hold', () => {
+  const r = C.selectionAccuracy({ n: 20, share: 0.5 });
+  assert.equal(r.k, 10);
+  assert.ok(r.hitsG > r.hitsPA, `${r.hitsG} > ${r.hitsPA}`);
+  assert.ok(r.hitsPA > 5, 'bedre end tilfældigt (5 af 10)');
+  assert.ok(r.meanG > r.meanPA);
+  // eksemplet ligger tæt på gennemsnittet
+  assert.ok(Math.abs(r.example.hitsPA - r.hitsPA) <= 1.5 && Math.abs(r.example.hitsG - r.hitsG) <= 1.5);
+  // perfekt skøn → alle rigtige
+  const p = C.selectionAccuracy({ n: 20, share: 0.5, rPA: 0.55, rG: 0.999999, sims: 200 });
+  assert.ok(p.hitsG > 9.8);
+});
+
+test('Arla klimapoint: øre pr. kg × mælk × køer', () => {
+  assert.equal(C.arlaClimateValue({ cows: 250, milkKgPerCow: 10000, oerePerKg: 1 }), 25000);
+  assert.equal(C.arlaClimateValue({ cows: 250, milkKgPerCow: 10000, oerePerKg: 0 }), 0);
+  assert.equal(C.arlaClimateValue({ cows: 250, milkKgPerCow: 10000, oerePerKg: NaN }), 0);
+});

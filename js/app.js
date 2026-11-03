@@ -34,6 +34,9 @@
     buffer: D.buffer,
     genomic: deep(C.GENOMIC_DEFAULTS),
     genBuffer: 0,
+    arla: { oerePerKg: 0, milkKgPerCow: 11000 },
+    ui: { open: {}, journey: false },
+    source: null,
     lasting: false,
     climate: deep(C.CLIMATE_DEFAULTS),
     dm: deep(C.DRYMATTER_DEFAULTS),
@@ -47,6 +50,8 @@
   });
   let S;
   try { S = Object.assign(initial(), JSON.parse(localStorage.getItem(KEY) || 'null') || {}); } catch (e) { S = initial(); }
+  if (!S.arla) S.arla = { oerePerKg: 0, milkKgPerCow: 11000 };
+  if (!S.ui || !S.ui.open) S.ui = { open: {}, journey: false };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignorer */ } };
 
   const getPath = (p) => p.split('.').reduce((o, k) => (o == null ? o : o[k]), S);
@@ -65,7 +70,9 @@
     // Udgangspunkt: brugerens oprindelige strategi, også efter de har valgt anbefalingen
     const orig = S.originalStrategy ? C.heiferBalance(S.herd, S.originalStrategy, S.biology, S.prices) : cur;
     const potential = rec.net - orig.net;
-    return { cur, rec, recInfo, gs, gopt, g, clim, dm, orig, potential };
+    const arla = C.arlaClimateValue({ cows: S.herd.cows, ...S.arla });
+    const genNet = gs.genomic.net + arla;
+    return { cur, rec, recInfo, gs, gopt, g, clim, dm, orig, potential, arla, genNet };
   }
 
   // ---------------------------------------------------------------- UI-byggeklodser
@@ -86,7 +93,10 @@
       <div class="inline-num"><input id="${id}" type="number" step="${step}" value="${getPath(path)}" data-path="${path}" data-live="1" inputmode="decimal"><span class="muted small">${unit}</span></div>
       ${help ? `<div class="help">${help}</div>` : ''}</div>`;
   }
-  const learn = (title, body, open = false) => `<details class="learn"${open ? ' open' : ''}><summary>${title}</summary><div class="body">${body}</div></details>`;
+  const learn = (title, body, open = false, keep = null) => {
+    const isOpen = keep ? (S.ui.open[keep] ?? open) : open;
+    return `<details class="learn"${keep ? ` data-keep="${keep}"` : ''}${isOpen ? ' open' : ''}><summary>${title}</summary><div class="body">${body}</div></details>`;
+  };
   const stat = (k, v, s = '', cls = '') => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
 
   function mixControl(group, title) {
@@ -143,7 +153,7 @@
   function applyQuiz() {
     const a = S.quiz.answers;
     if (a.cows) { S.herd.cows = a.cows; }
-    if (a.breed) { S.breed = a.breed; S.genomic.krPerNTMYear = C.NTM_VALUE_BY_BREED[a.breed]; }
+    if (a.breed) { S.breed = a.breed; S.genomic.krPerNTMYear = C.NTM_VALUE_BY_BREED[a.breed]; S.arla.milkKgPerCow = MILK_BY_BREED[a.breed]; }
     if (a.sexed) { S.strategy = deep(SEXED_PRESETS[a.sexed]); S.originalStrategy = null; }
     if (a.dm) S.dm.method = a.dm;
     if (a.focus === 'climate') S.interests.climate = true;
@@ -257,158 +267,177 @@
       return `<tr><td>${label}</td><td>${f(a)}</td><td>${f(b)}</td><td class="${cls ? (d > 0.5 ? 'pos' : d < -0.5 ? 'neg' : '') : ''}">${cls ? (Math.abs(d) < 0.5 ? '–' : (d > 0 ? '+' : '−') + f(Math.abs(d))) : ''}</td></tr>`;
     };
     let msg;
-    if (bal < -0.5) msg = `<div class="callout bad"><b>Du mangler ca. ${num(-bal)} kvier om året.</b> De skal købes til ca. ${kr(S.prices.heiferBuy)} stykket, eller køerne skal blive længere i besætningen. Indkøbte dyr kan også bringe smitte ind. Kønssorteret sæd på flere af de bedste dyr lukker hullet.</div>`;
-    else if (cur.balancePct > 0.05) msg = `<div class="callout"><b>Du laver ca. ${num(bal)} kvier mere, end du skal bruge.</b> Hver ekstra kvie koster ca. ${kr(S.prices.rearingCost)} at opdrætte, og du kan sælge den for ca. ${kr(S.prices.heiferSale)}. Hvis de kælvninger i stedet havde givet krydsningskalve, kunne kalvene være solgt efter få uger.</div>`;
-    else msg = `<div class="callout good"><b>Din kviebalance rammer behovet.</b> Se nedenfor, om du kan nå det samme med færre strå og flere krydsningskalve.</div>`;
+    if (bal < -0.5) msg = `Du mangler ca. <b>${num(-bal)} kvier om året</b>. De skal købes til ca. ${kr(S.prices.heiferBuy)} stykket, eller køerne skal blive længere.`;
+    else if (cur.balancePct > 0.05) msg = `Du laver ca. <b>${num(bal)} kvier mere</b>, end du bruger. Hver koster ca. ${kr(S.prices.rearingCost)} at opdrætte.`;
+    else msg = `Din kviebalance rammer behovet. Gevinsten ligger i at gøre resten af kalvene mere værd.`;
+    if (diff < 0 && bal < -0.5) msg += ` <b>Med dine priser er det ${kr(-diff)} billigere om året at købe kvierne (${kr(S.prices.heiferBuy)} stk.) end at lave dem selv.</b> Husk smitterisikoen ved indkøb, og at kvier er svære at skaffe. Justér købsprisen under "Dine priser og antagelser", hvis den er højere hos dig.`;
 
     return `<section class="card">
-      ${S.originalStrategy ? `<div class="callout good no-print">Du har valgt den anbefalede strategi. Dit udgangspunkt var: kvier ${mixText(S.originalStrategy.heifer)}, køer ${mixText(S.originalStrategy.cow)}. Gevinst i forhold til udgangspunktet: <b>${krS(R.potential)}</b> pr. år. <button class="linkbtn" data-action="restore-orig">Gå tilbage til min oprindelige strategi</button></div>` : ''}
-      <h2>Din kviebalance ${S.originalStrategy ? 'med den valgte strategi' : 'i dag'}</h2>
-      <div class="grid-4">
-        ${stat('Kælvninger pr. år', num(cur.calvings), `${num(cur.firstCalvings)} førstekælvere`)}
-        ${stat('Kvier der skal bruges', num(cur.need), 'pr. år')}
-        ${stat('Kvier du får frem', num(cur.heifersToCalving), 'til kælvning pr. år')}
-        ${stat('Balance', signNum(bal, 0) + ' kvier', pct(cur.balancePct) + ' af behovet', balCls)}
+      ${S.originalStrategy ? `<div class="callout good no-print">Du har valgt den anbefalede strategi. Gevinst i forhold til dit udgangspunkt: <b>${krS(R.potential)}</b> pr. år. <button class="linkbtn" data-action="restore-orig">Gå tilbage til min oprindelige strategi</button></div>` : ''}
+      <h2>Dit resultat</h2>
+      <div class="grid-3">
+        ${stat(S.originalStrategy ? 'Kviebalance med valgt strategi' : 'Kviebalance i dag', signNum(bal, 0) + ' kvier', `pr. år · behov ${num(cur.need)}`, balCls)}
+        ${stat('Anbefalet strategi giver', krS(diff), 'pr. år', diff >= 0 ? 'good' : 'bad')}
+        ${stat('Over 5 år', krS(diff * 5), `${krS(diff / S.herd.cows)} pr. årsko pr. år`)}
       </div>
-      ${msg}
-      <p class="small muted">Husk tidsforskydningen: En kalv, der bliver til i dag, fødes om 9 måneder og kælver selv ca. 2 år senere. Det, du vælger nu, rammer din kviebalance om ca. 3 år.</p>
-    </section>
-
-    <section class="card">
-      <h2>Den anbefalede strategi</h2>
-      <p>Kønssorteret sæd på de genetisk bedste hundyr, så du laver præcis de kvier, du skal bruge, plus en sikkerhedsmargin. Kødkvæg på resten. Konventionel malkeracesæd giver ca. 50 % tyrekalve med lav værdi og har ingen plads i planen.</p>
-      ${slider({ path: 'buffer', label: 'Sikkerhedsmargin på kvier', min: 0, max: 20, step: 1, unit: '%', pct: true, help: 'Ekstra kvier ud over behovet, som sikkerhed mod tab og som valgmulighed (se Genomisk test).' })}
-      ${!recInfo.feasible ? `<div class="callout bad">Med den udskiftningsprocent kan behovet ikke dækkes, selv med 100 % kønssorteret sæd. Udskiftningsprocenten bør ned, eller kælvningsintervallet bør forkortes.</div>` : ''}
-      <div class="grid-2" style="margin:8px 0 14px">
-        <div class="mix"><b>Kvier</b><div class="mixbar">${mixBarInner(rs.heifer)}</div><div class="small">${mixText(rs.heifer)}</div></div>
-        <div class="mix"><b>Køer</b><div class="mixbar">${mixBarInner(rs.cow)}</div><div class="small">${mixText(rs.cow)}</div></div>
+      <p style="margin-top:12px">${msg}</p>
+      <div class="grid-2" style="margin:8px 0 6px">
+        <div class="mix"><b>Anbefalet til kvier</b><div class="mixbar">${mixBarInner(rs.heifer)}</div><div class="small">${mixText(rs.heifer)}</div></div>
+        <div class="mix"><b>Anbefalet til køer</b><div class="mixbar">${mixBarInner(rs.cow)}</div><div class="small">${mixText(rs.cow)}</div></div>
       </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Pr. år</th><th>I dag</th><th>Anbefalet</th><th>Forskel</th></tr></thead>
-        <tbody>
-          ${row('Kvier til kælvning', cur.heifersToCalving, rec.heifersToCalving, (v) => num(v), false)}
-          ${row('Kviebalance', cur.balance, rec.balance, (v) => signNum(v, 0), false)}
-          ${row('Krydsningskalve solgt', cur.beefCalvesSold, rec.beefCalvesSold, (v) => num(v), true)}
-          ${row('Malkeracetyrekalve solgt', cur.bullCalvesSold, rec.bullCalvesSold, (v) => num(v), true)}
-          ${row('Inseminationer', cur.inseminations, rec.inseminations, (v) => num(v), false)}
-          ${row('Salg af krydsningskalve', cur.beefRevenue, rec.beefRevenue, kr, true)}
-          ${row('Salg af tyrekalve', cur.bullRevenue, rec.bullRevenue, kr, true)}
-          ${row('Kvieoverskud (+) / -underskud (−)', cur.heiferValue, rec.heiferValue, kr, true)}
-          ${row('Sæd og inseminering', -cur.semenCost, -rec.semenCost, kr, true)}
-          <tr class="total"><td>Netto kalveøkonomi</td><td>${kr(cur.net)}</td><td>${kr(rec.net)}</td><td class="${diff >= 0 ? 'pos' : 'neg'}">${krS(diff)}</td></tr>
-        </tbody>
-      </table></div>
-      <div class="grid-3" style="margin-top:14px">
-        ${stat('Forskel pr. år', krS(diff), 'anbefalet vs. i dag', diff >= 0 ? 'good' : 'bad')}
-        ${stat('Pr. årsko', krS(diff / S.herd.cows), '')}
-        ${stat('Over 5 år', krS(diff * 5), 'uden renter og prisændringer')}
-      </div>
-      <h3 style="margin-top:18px">Kalve pr. år</h3>
-      ${CH.bars({
-        categories: ['Kviekalve', 'Malkeracetyrekalve', 'Krydsningskalve'],
-        series: [
-          { name: 'I dag', color: 'var(--series-1)', values: [cur.heiferCalvesBorn, cur.bullCalvesBorn, cur.beefCalvesBorn] },
-          { name: 'Anbefalet', color: 'var(--series-2)', values: [rec.heiferCalvesBorn, rec.bullCalvesBorn, rec.beefCalvesBorn] },
-        ],
-        fmt: (v) => num(v), ariaLabel: 'Kalve pr. år i dag og med anbefalet strategi',
-      })}
-      <div class="btn-row"><button class="btn btn-ghost" data-action="use-rec">Brug den anbefalede strategi som min</button><button class="btn btn-primary" data-action="goto" data-step="2">Næste: Genomisk test →</button></div>
+      <p class="small muted">Kønssorteret sæd på de bedste dyr, så du laver præcis de kvier, du skal bruge (+${pct(S.buffer)} margin). Kødkvæg på resten. Det, du vælger nu, rammer kviebalancen om ca. 3 år.</p>
+      ${!recInfo.feasible ? `<div class="callout bad">Med den udskiftningsprocent kan behovet ikke dækkes, selv med 100 % kønssorteret sæd. Udskiftningen bør ned, eller kælvningsintervallet bør forkortes.</div>` : ''}
+      <div class="btn-row"><button class="btn btn-ghost" data-action="use-rec">Brug anbefalingen som min strategi</button><button class="btn btn-primary" data-action="goto" data-step="2">Næste: Hvem skal have kønssorteret? →</button></div>
+      ${learn('Se hele regnestykket', `
+        ${slider({ path: 'buffer', label: 'Sikkerhedsmargin på kvier', min: 0, max: 20, step: 1, unit: '%', pct: true, help: 'Ekstra kvier ud over behovet, som sikkerhed mod tab.' })}
+        <div class="table-wrap"><table>
+          <thead><tr><th>Pr. år</th><th>I dag</th><th>Anbefalet</th><th>Forskel</th></tr></thead>
+          <tbody>
+            ${row('Kælvninger', cur.calvings, rec.calvings, (v) => num(v), false)}
+            ${row('Kvier til kælvning', cur.heifersToCalving, rec.heifersToCalving, (v) => num(v), false)}
+            ${row('Krydsningskalve solgt', cur.beefCalvesSold, rec.beefCalvesSold, (v) => num(v), true)}
+            ${row('Malkeracetyrekalve solgt', cur.bullCalvesSold, rec.bullCalvesSold, (v) => num(v), true)}
+            ${row('Salg af kalve', cur.beefRevenue + cur.bullRevenue, rec.beefRevenue + rec.bullRevenue, kr, true)}
+            ${row('Kvieoverskud (+) / -underskud (−)', cur.heiferValue, rec.heiferValue, kr, true)}
+            ${row('Sæd og inseminering', -cur.semenCost, -rec.semenCost, kr, true)}
+            <tr class="total"><td>Netto kalveøkonomi</td><td>${kr(cur.net)}</td><td>${kr(rec.net)}</td><td class="${diff >= 0 ? 'pos' : 'neg'}">${krS(diff)}</td></tr>
+          </tbody>
+        </table></div>
+        <h3 style="margin-top:16px">Kalve pr. år</h3>
+        ${CH.bars({
+          categories: ['Kviekalve', 'Malkeracetyrekalve', 'Krydsningskalve'],
+          series: [
+            { name: 'I dag', color: 'var(--series-1)', values: [cur.heiferCalvesBorn, cur.bullCalvesBorn, cur.beefCalvesBorn] },
+            { name: 'Anbefalet', color: 'var(--series-2)', values: [rec.heiferCalvesBorn, rec.bullCalvesBorn, rec.beefCalvesBorn] },
+          ],
+          fmt: (v) => num(v), height: 220, ariaLabel: 'Kalve pr. år i dag og med anbefalet strategi',
+        })}
+        <div class="formula">kælvninger      = køer × 12 ÷ kælvningsinterval
+behov           = køer × udskiftningsprocent
+kviekalve       = Σ kælvninger × andel sædtype × andel hunkøn
+kvier til kælvn = kviekalve × (1 − kalvetab) × (1 − opdrætstab)
+netto           = kalvesalg + kvieoverskud/-underskud − sæd og ins.</div>
+        <p class="small muted">Opdræt af de kvier, du <i>skal</i> bruge, er ens i alle strategier og indgår ikke.</p>`, false, 'heifer-calc')}
     </section>
 
     <section class="card">
       <h2>Bliv klogere</h2>
-      ${learn('Hvorfor kønssorteret sæd på kvierne først?', `<p>Kvier har den højeste drægtighedsprocent med kønssorteret sæd. Og fordi avlen går fremad hvert år, er kvierne i gennemsnit også de genetisk bedste dyr i besætningen. Kønssorteret sæd på kvierne giver derfor flest og bedste kviekalve pr. strå.</p>`)}
-      ${learn('Hvad koster kønssorteret sæd, når drægtigheden er lavere?', `<p>Prisen pr. strå er kun halvdelen af regnestykket. Med ${pct(S.biology.conception.heifer.sexed)} drægtighed på kvier skal der i snit bruges ${num(1 / S.biology.conception.heifer.sexed, 1)} strå pr. drægtighed. Beregneren regner med prisen pr. <i>drægtighed</i>: (strå + inseminering) ÷ drægtighedsprocent.</p>`)}
-      ${learn('Hvorfor kødkvæg på resten?', `<p>En krydsningskalv (fx Angus, Belgisk Blåhvid eller Limousine på malkeko) er typisk flere gange mere værd end en malkeracetyrekalv. Når du kun laver de kviekalve, du skal bruge, kan alle øvrige kælvninger give krydsningskalve.</p>`)}
-      ${learn('Sådan regner beregneren', `<div class="formula">kælvninger      = køer × 12 ÷ kælvningsinterval
-behov           = køer × udskiftningsprocent
-kviekalve       = Σ kælvninger × andel sædtype × andel hunkøn
-kvier til kælvn = kviekalve × (1 − kalvetab) × (1 − opdrætstab)
-netto           = kalvesalg + kvieoverskud/-underskud − sæd og ins.</div><p class="small">Opdræt af de kvier, du <i>skal</i> bruge, er ens i alle strategier og indgår derfor ikke.</p>`)}
+      ${learn('Hvorfor kønssorteret sæd på kvierne først?', `<p>Kvier har den højeste drægtighedsprocent med kønssorteret sæd. Og fordi avlen går fremad hvert år, er kvierne i gennemsnit også de genetisk bedste dyr i besætningen.</p>`, false, 'h1')}
+      ${learn('Hvad koster kønssorteret sæd, når drægtigheden er lavere?', `<p>Med ${pct(S.biology.conception.heifer.sexed)} drægtighed på kvier bruges der i snit ${num(1 / S.biology.conception.heifer.sexed, 1)} strå pr. drægtighed. Beregneren regner med prisen pr. <i>drægtighed</i>.</p>`, false, 'h2')}
+      ${learn('Hvorfor kødkvæg på resten?', `<p>En krydsningskalv er typisk flere gange mere værd end en malkeracetyrekalv. Når du kun laver de kviekalve, du skal bruge, kan alle øvrige kælvninger give krydsningskalve.</p>`, false, 'h3')}
     </section>`;
   }
 
   // ---------------------------------------------------------------- trin 2: genomisk test
+  const MILK_BY_BREED = { holstein: 11000, rdm: 10000, jersey: 8000, kryds: 10000 };
+  let accCache = { key: '', val: null };
+  function accuracy(share) {
+    const g = S.genomic;
+    const key = [share, g.accParentAverage, g.accGenomic, g.sdNTM].join('|');
+    if (accCache.key !== key) accCache = { key, val: C.selectionAccuracy({ n: 20, share, rPA: g.accParentAverage, rG: g.accGenomic, sd: g.sdNTM }) };
+    return accCache.val;
+  }
+
   function renderGenomic() {
     const breeds = [['holstein', 'Holstein'], ['rdm', 'Rød Dansk'], ['jersey', 'Jersey'], ['kryds', 'Krydsning']];
     return `<section class="card hero">
       <div class="eyebrow">Beregner 2 · Genomisk test</div>
-      <h1>Hvad er en genomisk test værd for dig?</h1>
-      <p class="lead">En test giver først værdi, når du bruger svaret til en beslutning. Hvilke kviekalve skal opdrættes? Hvilke hundyr skal have kønssorteret sæd, og hvilke skal have kødkvæg? Her kan du se, hvornår testen tjener sig hjem.</p>
+      <h1>Hvem skal have kønssorteret, og hvem skal have kødkvæg?</h1>
+      <p class="lead">Når du kun laver de kvier, du skal bruge, bliver hvert valg vigtigt. Her er 20 kviekalve. Se, hvem du ville vælge uden test og med genomisk test.</p>
     </section>
+    <div id="results"></div>
     <div class="grid-2">
       <section class="card">
-        <h2>Indstillinger</h2>
+        <h2>Dine tal</h2>
         <div class="field"><div class="lbl">Race</div>
-          <div class="seg" role="group" aria-label="Race">${breeds.map(([k, t]) => `<button data-action="breed" data-value="${k}" aria-pressed="${S.breed === k}">${t}</button>`).join('')}</div>
-          <div class="help">Værdien af én NTM-enhed er ${kr(S.genomic.krPerNTMYear)} pr. årsko for den valgte race (Nordic EBV).</div></div>
+          <div class="seg" role="group" aria-label="Race">${breeds.map(([k, t]) => `<button data-action="breed" data-value="${k}" aria-pressed="${S.breed === k}">${t}</button>`).join('')}</div></div>
         ${slider({ path: 'genomic.testPrice', label: 'Pris pr. test', min: 100, max: 400, step: 10, unit: 'kr.' })}
-        ${slider({ path: 'genBuffer', label: 'Selektionsrum', min: 0, max: 30, step: 2.5, unit: '%', pct: true, dec: 1, help: 'Hvor mange flere kviekalve end behovet du laver, tester og vælger imellem. De dårligste sælges som kviekalve.' })}
-        <label class="check"><input type="checkbox" data-action="lasting" ${S.lasting ? 'checked' : ''}><span><b>Medregn varig fremgang</b><br><span class="small muted">Døtrenes døtre arver også fremgangen. Værdien sættes 1,5 gange op.</span></span></label>
-        <details class="learn"><summary>Avancerede antagelser</summary><div class="body">
+        <h3 style="margin-top:18px">Arla klimapoint for genomisk test</h3>
+        <p class="small muted">Fra 1. januar 2027 kan genomisk test give klimapoint hos Arla. Skriv tillægget ind, når satsen er kendt. Står den på 0, regnes der ikke med den.</p>
+        <div class="grid-2">
+          ${numberField({ path: 'arla.oerePerKg', label: 'Tillæg', unit: 'øre pr. kg mælk', step: 0.1 })}
+          ${numberField({ path: 'arla.milkKgPerCow', label: 'Leveret mælk', unit: 'kg pr. årsko', step: 100 })}
+        </div>
+        ${learn('Avancerede antagelser', `
           ${slider({ path: 'genomic.accParentAverage', label: 'Sikkerhed uden test (afstamning)', min: 0.3, max: 0.7, step: 0.01, dec: 2, help: 'Korrelation mellem indeks og sand avlsværdi. Afstamningsfejl trækker ned.' })}
           ${slider({ path: 'genomic.accGenomic', label: 'Sikkerhed med genomisk test', min: 0.6, max: 0.9, step: 0.01, dec: 2 })}
           ${slider({ path: 'genomic.sdNTM', label: 'Genetisk spredning', min: 6, max: 14, step: 1, unit: 'NTM' })}
           ${numberField({ path: 'genomic.krPerNTMYear', label: 'Kr. pr. NTM-enhed pr. årsko', unit: 'kr.' })}
-        </div></details>
+          ${slider({ path: 'genBuffer', label: 'Ekstra kviekalve at vælge imellem', min: 0, max: 30, step: 2.5, unit: '%', pct: true, dec: 1, help: 'Lav flere kviekalve end behovet, test dem og opdræt kun de bedste. De øvrige sælges som kviekalve.' })}
+          <label class="check"><input type="checkbox" data-action="lasting" ${S.lasting ? 'checked' : ''}><span><b>Medregn varig fremgang</b><br><span class="small muted">Døtrenes døtre arver også fremgangen (×1,5).</span></span></label>`, false, 'gen-adv')}
       </section>
       <section class="card">
         <h2>Hvad er det, du køber?</h2>
-        ${learn('Genomisk test på én side', `<p>Der tages en vævsprøve, typisk fra øremærket, når kalven mærkes. DNA'et sammenlignes med tusindvis af testede dyr. Det giver kalven sine egne avlsværdital, NTM, fra første levedag, og sikkerheden er næsten lige så høj som for en ko med flere laktationer bag sig.</p>`, true)}
-        ${learn('Hvad er NTM?', `<p>NTM (Nordisk Total Merit) samler alle egenskaber i ét økonomisk tal: ydelse, sundhed, frugtbarhed, holdbarhed, klove, kælvning, fodereffektivitet og metan. Én NTM-enhed er ifølge Nordic EBV ca. 9-10 € pr. årsko værd for Holstein.</p>`)}
-        ${learn('Hvorfor hjælper "sikkerhed"?', `<p>Uden test kender du kun forældrenes gennemsnit. Men søskende er forskellige, og stamtavlen er ikke altid rigtig. Testen viser, hvilke af søstrene der fik de bedste gener. Jo højere sikkerheden er, jo oftere vælger du de rigtige dyr.</p>`)}
-        ${learn('Det får du også ud af testen (ikke regnet med)', `<ul><li>Afstamningskontrol, så forkerte fædre bliver fanget</li><li>Bærerstatus for arvelige defekter. Parringsprogrammet undgår bærer × bærer.</li><li>Beta-kasein (A2), kappa-kasein og hornstatus</li><li>Indavlskontrol i parringsplanen</li><li>Et bedre grundlag for at beslutte, hvilke kvier der skal sælges</li></ul>`)}
+        ${learn('Genomisk test på én side', `<p>Der tages en vævsprøve fra øremærket, når kalven mærkes. Kalven får sine egne avlsværdital (NTM) fra første levedag, med næsten samme sikkerhed som en ko med flere laktationer.</p>`, true, 'g1')}
+        ${learn('Hvad er NTM?', `<p>NTM (Nordisk Total Merit) samler ydelse, sundhed, frugtbarhed, holdbarhed, klove, kælvning, fodereffektivitet og metan i ét økonomisk tal. Én NTM-enhed er ca. 9-10 € pr. årsko værd for Holstein (Nordic EBV).</p>`, false, 'g2')}
+        ${learn('Hvorfor vælger man forkert uden test?', `<p>Uden test kender du kun forældrenes gennemsnit, og søstre med samme forældre ser ens ud på papiret. Men de har arvet forskellige gener, og stamtavlen er ikke altid rigtig. Testen viser, hvilken af søstrene der fik de bedste gener.</p>`, false, 'g3')}
+        ${learn('Det får du også ud af testen (ikke regnet med)', `<ul><li>Afstamningskontrol</li><li>Bærerstatus for arvelige defekter, så parringsprogrammet undgår bærer × bærer</li><li>Beta-kasein (A2), kappa-kasein og hornstatus</li><li>Indavlskontrol</li></ul>`, false, 'g4')}
       </section>
-    </div>
-    <div id="results"></div>`;
+    </div>`;
+  }
+
+  function calfStrip(ex, key, label, hits, k) {
+    const order = [...ex.calves].sort((a, b) => b.true - a.true);
+    const chosen = ex[key];
+    const cells = order.map((c, i) => {
+      const isTop = i < k, sel = chosen.has(c.id);
+      const cls = sel ? (isTop ? 'calf sel' : 'calf sel wrong') : (isTop ? 'calf miss' : 'calf');
+      const tip = `<b>Kalv nr. ${i + 1} af 20</b> (sand rangering)<br>Sand avlsværdi: ${signNum(c.true, 1)} NTM<br>Skøn uden test: ${signNum(c.pa, 1)}<br>Skøn med test: ${signNum(c.g, 1)}<br>${sel ? 'Får kønssorteret' : 'Får kødkvæg'}${isTop && !sel ? ' (fejl: en af de bedste)' : !isTop && sel ? ' (fejl: ikke blandt de bedste)' : ''}`;
+      return `<span class="${cls}" data-tip="${esc(tip)}">${i + 1}</span>`;
+    }).join('');
+    return `<div class="strip"><div class="strip-head"><b>${label}</b><span>${num(hits)} af ${k} rigtige</span></div>
+      <div class="calves" style="--k:${k}">${cells}</div></div>`;
   }
 
   function genomicResults(R) {
     const { gs, gopt } = R;
     const gv = gs.genomic;
-    const cover = gv.cost > 0 ? gv.value / gv.cost : 0;
-    const breakEvenPrice = gv.tested > 0 ? gv.value / gv.tested : 0;
-    const totalVsBase = gs.total - gopt.base;
-    const pts = gopt.points;
+    const share = Math.min(0.9, Math.max(0.1, Math.round(gs.hb.sexedShareOfCalvings * 20) / 20));
+    const acc = accuracy(share);
+    const ex = acc.example;
+    const k = acc.k;
+    const arla = C.arlaClimateValue({ cows: S.herd.cows, ...S.arla });
+    const net = gv.value + arla - gv.cost;
+    const milkTotal = S.herd.cows * S.arla.milkKgPerCow;
+    const needOere = milkTotal > 0 ? Math.max(0, (gv.cost - gv.value) / milkTotal * 100) : 0;
+    const wrongPA = k - Math.round(acc.hitsPA), wrongG = k - Math.round(acc.hitsG);
     let msg;
-    if (gv.net >= 0) msg = `<div class="callout good"><b>Testen tjener sig hjem.</b> Avlsfremgangen er ${kr(gv.value)} værd om året mod en testudgift på ${kr(gv.cost)}. Det svarer til ${pct(cover)} af prisen.</div>`;
-    else msg = `<div class="callout"><b>Avlsfremgangen alene dækker ${pct(cover)} af testprisen.</b> Testen går i nul ved en pris på ca. ${kr(breakEvenPrice)} pr. test. Den betaler sig bedst, når udskiftningen er lav og kælvningsintervallet kort, for så er der mere at vælge imellem. Fordelene i boksen til højre er ikke regnet med.</div>`;
-    const bestNote = gopt.best && gopt.best.buffer > 0
-      ? `Med dine tal er det økonomisk bedste selektionsrum ca. <b>${pct(gopt.best.buffer, 1)}</b>.`
-      : `Med dine tal betaler det sig <b>ikke</b> at lave ekstra kviekalve for at have flere at vælge imellem. En krydsningskalv er mere værd end den ekstra avlsfremgang. Brug i stedet testen til at vælge, hvem der skal have kønssorteret sæd, og hvem der skal have kødkvæg.`;
+    if (net >= 0) msg = `<div class="callout good"><b>Testen tjener sig hjem${arla > 0 ? ' med Arla-tillægget' : ''}:</b> ${krS(net)} om året efter testudgiften.</div>`;
+    else msg = `<div class="callout"><b>Avlsfremgangen dækker ${pct(gv.value / Math.max(1, gv.cost))} af testprisen.</b> ${arla > 0 ? 'Med det indtastede Arla-tillæg mangler der stadig ' + kr(-net) + ' om året.' : `Arla-tillægget skal være mindst <b>${num(needOere, 2)} øre pr. kg mælk</b>, før testen tjener sig hjem med dine tal.`} Fordelene, der ikke er regnet med, kommer oveni.</div>`;
+    const pts = gopt.points;
     return `<section class="card">
-      <h2>Din besætning med genomisk test</h2>
+      <h2>${num(k)} ud af 20 skal have kønssorteret. Hvem vælger du?</h2>
+      <p class="small muted">Kalvene står i rækkefølge efter deres <b>sande</b> avlsværdi: nr. 1 er den bedste. De ${num(k)} til venstre for stregen er dem, der burde have kønssorteret. <span class="calf sel inline"></span> får kønssorteret · <span class="calf inline"></span> får kødkvæg · <span class="calf miss inline"></span> en af de bedste, der fik kødkvæg.</p>
+      ${calfStrip(ex, 'pa', 'Uden test: afstamning', ex.hitsPA, k)}
+      ${calfStrip(ex, 'g', 'Med genomisk test', ex.hitsG, k)}
+      <div class="grid-3" style="margin-top:14px">
+        ${stat('Uden test', `${num(acc.hitsPA, 1)} af ${k}`, `ca. ${wrongPA} af dine bedste kvier ender med kødkvæg`, 'bad')}
+        ${stat('Med genomisk test', `${num(acc.hitsG, 1)} af ${k}`, `ca. ${wrongG} fejlvalg`, 'good')}
+        ${stat('Mødrene til næste generation', `+${num(acc.meanG - acc.meanPA, 1)} NTM`, 'bedre i snit med test')}
+      </div>
+      <p class="small muted">Gennemsnit over 2.000 simulerede hold på 20 kalve. Det viste hold er et typisk eksempel. Hold musen over en kalv for at se tallene.</p>
+    </section>
+    <section class="card">
+      <h2>Hvad er det værd for dig?</h2>
       <div class="grid-4">
-        ${stat('Kviekalve testet', num(gv.tested), 'pr. år')}
-        ${stat('Avlsfremgang', '+' + num(gv.gainTotalNTM, 1) + ' NTM', 'pr. opdrættet kvie (inkl. døtre)')}
-        ${stat('Værdi af fremgang', kr(gv.value), 'pr. år')}
-        ${stat('Netto', krS(gv.net), `testudgift ${kr(gv.cost)}`, gv.net >= 0 ? 'good' : 'bad')}
+        ${stat('Avlsfremgang', kr(gv.value), 'pr. år')}
+        ${stat('Arla klimapoint', arla > 0 ? kr(arla) : '–', arla > 0 ? `${num(S.arla.oerePerKg, 2)} øre/kg` : 'indtast sats nedenfor')}
+        ${stat('Testudgift', '−' + kr(gv.cost), `${num(gv.tested)} kalve × ${kr(S.genomic.testPrice)}`)}
+        ${stat('Netto', krS(net), 'pr. år', net >= 0 ? 'good' : 'bad')}
       </div>
       ${msg}
-      <div class="table-wrap"><table>
-        <thead><tr><th>Beslutning, testen forbedrer</th><th>Valgt andel</th><th>NTM-gevinst</th><th>Værdi/år</th></tr></thead>
-        <tbody>
-          <tr><td>Hvilke kviekalve der opdrættes</td><td>${pct(gv.pKeep)}</td><td>+${num(gv.gainKeepNTM, 2)}</td><td>${kr(gv.valueKeep)}</td></tr>
-          <tr><td>Hvilke hundyr der får kønssorteret sæd (resten: kødkvæg)</td><td>${pct(gs.hb.sexedShareOfCalvings)}</td><td>+${num(gv.gainDaughterNTM, 2)}</td><td>${kr(gv.valueDaughters)}</td></tr>
-          <tr class="total"><td>I alt</td><td></td><td>+${num(gv.gainTotalNTM, 2)}</td><td>${kr(gv.value)}</td></tr>
-        </tbody>
-      </table></div>
-      <h3 style="margin-top:18px">Hvor meget selektionsrum kan betale sig?</h3>
-      <p class="small muted">Samlet økonomi (kalve, kvier, sæd og genomisk merværdi minus testpris) sammenlignet med den anbefalede strategi uden test og uden ekstra kvier. Den stiplede linje er dit valg.</p>
-      ${CH.lines({
-        xs: pts.map((p) => p.buffer),
-        series: [
-          { name: 'Samlet gevinst vs. uden test', color: 'var(--series-1)', values: pts.map((p) => p.vsBase) },
-          { name: 'Genomisk merværdi − testpris', color: 'var(--series-2)', values: pts.map((p) => p.gain - p.cost) },
-        ],
-        fmt: axisKr, xfmt: (v) => pct(v, 1), markX: pts.find((p) => Math.abs(p.buffer - S.genBuffer) < 1e-6)?.buffer,
-        ariaLabel: 'Gevinst som funktion af selektionsrum',
-      })}
-      <p class="small">${bestNote}</p>
-      ${learn('Sådan regner beregneren', `<div class="formula">gevinst pr. opdrættet kvie = i(andel beholdt) × (r_genomisk − r_afstamning) × σ
-gevinst pr. datter        = ½ × i(andel kønssorteret) × (r_genomisk − r_afstamning) × σ
-værdi                     = NTM-gevinst × kr./NTM pr. årsko × ${num(S.genomic.productiveYears, 1)} årsko-år
-i(p) = selektionsintensitet ved at vælge de bedste p (normalfordeling)</div>`)}
+      ${learn('Sådan regner beregneren', `<div class="formula">rigtige valg    = simulering: sand avlsværdi vs. skøn med sikkerhed r (uden test ${num(S.genomic.accParentAverage, 2)}, med test ${num(S.genomic.accGenomic, 2)})
+avlsfremgang    = bedre mødre (½ arves) + bedre udvalg af kvier × ${kr(S.genomic.krPerNTMYear)} pr. NTM pr. årsko × ${num(S.genomic.productiveYears, 1)} år
+Arla klimapoint = årskøer × kg mælk pr. ko × øre pr. kg ÷ 100
+netto           = avlsfremgang + klimapoint − antal testede kalve × testpris</div>
+        <h3 style="margin-top:14px">Kan det betale sig at lave ekstra kviekalve at vælge imellem?</h3>
+        ${CH.lines({
+          xs: pts.map((p) => p.buffer),
+          series: [{ name: 'Samlet gevinst vs. uden test', color: 'var(--series-2)', values: pts.map((p) => p.vsBase + arla) }],
+          fmt: axisKr, xfmt: (v) => pct(v, 1), height: 200, markX: pts.find((p) => Math.abs(p.buffer - S.genBuffer) < 1e-6)?.buffer,
+          ariaLabel: 'Gevinst som funktion af ekstra kviekalve',
+        })}
+        <p class="small">${gopt.best && gopt.best.buffer > 0 ? `Bedst ved ca. ${pct(gopt.best.buffer, 1)} ekstra kviekalve.` : 'Med dine tal betaler det sig ikke at lave ekstra kviekalve, fordi en krydsningskalv er mere værd end den ekstra avlsfremgang.'}</p>`, false, 'gen-calc')}
       <div class="btn-row"><button class="btn btn-ghost" data-action="goto" data-step="1">← Kvieplan</button><button class="btn btn-primary" data-action="goto" data-step="3">Næste: Klima & foder →</button></div>
     </section>`;
   }
@@ -559,7 +588,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     const R = results();
     const { orig: cur, gs, clim, dm } = R;
     const diff = R.potential;
-    const gNet = gs.genomic.net;
+    const gNet = R.genNet;
     const r35 = clim.rows.find((r) => r.year === 2035);
     if (S.submitted) return renderThanks(R);
     const c = S.contact;
@@ -573,7 +602,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     <section class="card">
       <div class="grid-2">
         ${planItem(1, 'Kvieplan', cur.balance < -0.5 ? `Du mangler ca. ${num(-cur.balance)} kvier/år` : cur.balancePct > 0.05 ? `Du har ca. ${num(cur.balance)} kvier for meget/år` : 'Din kviebalance passer', `Anbefalet strategi: ${krS(diff)} pr. år`)}
-        ${planItem(2, 'Genomisk test', `+${num(gs.genomic.gainTotalNTM, 1)} NTM pr. opdrættet kvie`, `Netto ${krS(gNet)} pr. år (${pct(gs.genomic.value / Math.max(1, gs.genomic.cost))} dækning)`)}
+        ${planItem(2, 'Genomisk test', `Flere rigtige valg af kvier til kønssorteret`, `Netto ${krS(gNet)} pr. år${R.arla > 0 ? ' inkl. Arla-klimapoint' : ''}`)}
         ${planItem(3, 'Klima & foder', `Afgift 2035: ${kr(r35.taxBase)}`, `Avlsgevinst 2030-40: ${kr(clim.cumTaxSaved + clim.cumFeedSaved)}`)}
         ${planItem(4, 'Tørstof', `Tab i dag: ${kr(dm.current.perYear)}/år`, `Gevinst med NIR: ${kr(Math.max(0, dm.savingWithNIR))}/år`)}
       </div>
@@ -657,7 +686,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       now: S.submittedAt ? new Date(S.submittedAt) : new Date(),
       name: S.contact.name, cows: S.herd.cows, mailOptIn: !!S.contact.mailOptIn,
       heiferBalance: R.orig.balance, need: R.orig.need, potential: R.potential,
-      genomicNet: R.gs.genomic.net, genomicTested: R.gs.genomic.tested,
+      genomicNet: R.genNet, genomicTested: R.gs.genomic.tested,
       tax2030: R.clim.rows[0].taxBase, tax2035: R.clim.rows[5].taxBase, drySaving: R.dm.savingWithNIR,
       dmMethod: S.dm.method, focus: a.focus, genomicAnswer: a.genomic, interests: S.interests,
       advisor: adv, planUrl: planUrl(), bookUrl: `${planUrl()}`,
@@ -742,8 +771,8 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       <div class="side-row"><span>Kælvningsinterval</span><span>${num(S.herd.calvingIntervalMonths, 1)} mdr.</span></div>
       <h3 style="margin-top:14px">Dine resultater</h3>
       <div class="side-row"><span>Kviebalance i dag</span><span class="${R.orig.balance < -0.5 ? 'neg' : ''}">${signNum(R.orig.balance, 0)}/år</span></div>
-      <div class="side-row"><span>Anbefalet kvieplan</span><span class="pos">${krS(R.potential)}</span></div>
-      <div class="side-row"><span>Genomisk test, netto</span><span class="${R.gs.genomic.net >= 0 ? 'pos' : 'neg'}">${krS(R.gs.genomic.net)}</span></div>
+      <div class="side-row"><span>Anbefalet kvieplan</span><span class="${R.potential >= 0 ? 'pos' : 'neg'}">${krS(R.potential)}</span></div>
+      <div class="side-row"><span>Genomisk test, netto</span><span class="${R.genNet >= 0 ? 'pos' : 'neg'}">${krS(R.genNet)}</span></div>
       <div class="side-row"><span>Klimaafgift 2035</span><span>${kr(R.clim.rows[5].taxBase)}</span></div>
       <div class="side-row"><span>Tørstof, mulig gevinst</span><span class="pos">${kr(Math.max(0, R.dm.savingWithNIR))}</span></div>
       <div style="margin-top:12px" class="small muted">Beregnere gennemgået: ${done} af 4</div>
@@ -760,11 +789,12 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     const slot = S.booking.slot && S.booking.slot.type === S.booking.type ? S.booking.slot : null;
     const adv = EN.advisorForZip(S.contact.zip);
     const ls = C.leadScore({
-      cows: S.herd.cows, heiferBalancePct: R.orig.balancePct, genomicNet: R.gs.genomic.net,
+      cows: S.herd.cows, heiferBalancePct: R.orig.balancePct, genomicNet: R.genNet,
       drySaving: R.dm.savingWithNIR, toolsCompleted: S.visited.filter((x) => x >= 1 && x <= 4).length + (slot ? 1 : 0),
       wantsContact: S.submitted, quizAnswers: a,
     });
     const tags = [];
+    if (S.source) tags.push(`Kilde: ${SOURCES[S.source] || S.source}`);
     if (S.quiz.done) tags.push(AREAS[quizScores(a).top[0]].profile);
     if (slot) tags.push('Møde booket'); else if (S.booking.type === 'callback' && S.submitted) tags.push('Ønsker opkald');
     if (R.orig.balance < -0.5) tags.push('Mangler kvier'); else if (R.orig.balancePct > 0.05) tags.push('Kvieoverskud');
@@ -782,6 +812,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     const nurture = EN.buildNurture(nurtureCtx(R));
     const payload = {
       kontakt: { navn: c.name, bedrift: c.farm, telefon: c.phone, email: c.email, postnr: c.zip, cvr: c.cvr, samtykke: c.consent, mail_optin: !!c.mailOptIn, bemaerkning: c.note },
+      kilde: S.source || 'direkte',
       raadgiver: adv ? adv.id : null,
       booking: slot ? { type: slot.type, dato: slot.date, tid: slot.time, minutter: EN.MEETING_TYPES[slot.type].minutes }
         : S.booking.type === 'callback' ? { type: 'callback', tidspunkt: S.booking.callbackWhen } : null,
@@ -789,7 +820,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       quiz: a, strategi_i_dag: S.originalStrategy || S.strategy, valgt_strategi: S.strategy,
       resultater: {
         kviebalance: +R.orig.balance.toFixed(1), kvieplan_gevinst_kr: Math.round(R.potential),
-        genomisk_netto_kr: Math.round(R.gs.genomic.net), klimaafgift_2035_kr: Math.round(R.clim.rows[5].taxBase),
+        genomisk_netto_kr: Math.round(R.genNet), arla_klimapoint_kr: Math.round(R.arla), klimaafgift_2035_kr: Math.round(R.clim.rows[5].taxBase),
         toerstof_gevinst_kr: Math.round(Math.max(0, R.dm.savingWithNIR)), toerstof_maalemetode: S.dm.method,
       },
       interesser: Object.keys(S.interests).filter((k) => S.interests[k]),
@@ -821,6 +852,126 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     </div>`;
   }
 
+  // ---------------------------------------------------------------- kunderejse, demo-bedrifter, indgange
+  const SOURCES = {
+    'nyhed-klimapoint': 'Nyhed: "Klimapoint for genomisk test"',
+    nyhedsbrev: 'Nyhedsbrev',
+    facebook: 'Annonce på Facebook',
+    google: 'Søgning på Google',
+    raadgiver: 'Link fra rådgiver',
+    demo: 'Demo-bedrift',
+  };
+  const START_STEPS = { tjek: 0, kvier: 1, genomisk: 2, klima: 3, toerstof: 4, plan: 5 };
+
+  // Fiktive demo-bedrifter til præsentation (ingen rigtige personer)
+  const PERSONAS = {
+    jersey: {
+      label: 'Jersey · 180 køer · mangler kvier', zip: '6270', farm: 'Demo-bedrift A (fiktiv)',
+      herd: { cows: 180, replacementRate: 0.40, calvingIntervalMonths: 13.2 },
+      answers: { cows: 180, breed: 'jersey', heifers: 'short', sexed: 'no', genomic: 'no', dm: 'weekly', focus: 'economy' },
+      interests: { plan: true, test: true, nir: false, climate: false },
+    },
+    holstein: {
+      label: 'Holstein · 600 køer · ingen tørstofmåling', zip: '6950', farm: 'Demo-bedrift B (fiktiv)',
+      herd: { cows: 600, replacementRate: 0.34, calvingIntervalMonths: 12.6 },
+      answers: { cows: 600, breed: 'holstein', heifers: 'surplus', sexed: 'targeted', genomic: 'some', dm: 'never', focus: 'feed' },
+      strategy: { heifer: { sexed: 0.7, conv: 0.3, beef: 0 }, cow: { sexed: 0.1, conv: 0.45, beef: 0.45 } },
+      interests: { plan: true, test: false, nir: true, climate: false },
+    },
+    rdm: {
+      label: 'Rød Dansk · 120 køer · klimafokus', zip: '5600', farm: 'Demo-bedrift C (fiktiv)',
+      herd: { cows: 120, replacementRate: 0.36, calvingIntervalMonths: 12.8 },
+      answers: { cows: 120, breed: 'rdm', heifers: 'ok', sexed: 'some', genomic: 'all', dm: 'nir', focus: 'climate' },
+      interests: { plan: true, test: false, nir: false, climate: true },
+    },
+  };
+
+  function loadPersona(id) {
+    const p = PERSONAS[id];
+    const keepUi = S.ui;
+    S = initial();
+    S.ui = { ...keepUi, open: {} };
+    S.herd = deep(p.herd);
+    S.quiz = { i: QUIZ.length - 1, answers: deep(p.answers), done: true };
+    applyQuiz();
+    if (p.strategy) S.strategy = deep(p.strategy);
+    S.interests = deep(p.interests);
+    S.contact = { ...S.contact, name: `${p.label.split(' · ')[0]}-bedriften (demo)`, farm: p.farm, zip: p.zip, phone: '12 34 56 78', email: 'demo@example.dk' };
+    S.source = 'demo';
+    S.visited = [0];
+    toast(`Demo-bedrift indlæst: ${p.label}`);
+    go(0);
+  }
+
+  function journeyStages(R) {
+    const L = leadData(R);
+    const calcDone = S.visited.filter((x) => x >= 1 && x <= 4).length;
+    const slot = L.slot;
+    const booked = !!slot || (S.booking.type === 'callback' && !!L.adv);
+    const a = S.quiz.answers;
+    const nMails = L.nurture.length;
+    const st = [
+      { id: 'entry', title: 'Indgang', done: true,
+        know: S.source ? SOURCES[S.source] || S.source : 'Direkte besøg',
+        auto: 'Kilde og kampagne registreres, så marketing kan se, hvilke indgange der giver leads.' },
+      { id: 'quiz', title: 'Besætningstjek', done: S.quiz.done,
+        know: S.quiz.done ? `${num(S.herd.cows)} årskøer, ${({ holstein: 'Holstein', rdm: 'Rød Dansk', jersey: 'Jersey', kryds: 'krydsning' })[S.breed]}, profil: ${AREAS[quizScores(a).top[0]].profile}` : 'Endnu intet',
+        auto: 'Profil og startsted vælges. Alle beregnere forudfyldes med bedriftens tal.' },
+      { id: 'calc', title: 'Beregnere', done: calcDone >= 2, progress: `${calcDone}/4`,
+        know: calcDone ? `Kviebalance ${signNum(R.orig.balance, 0)}/år · kvieplan ${krS(R.potential)} · tørstof ${kr(Math.max(0, R.dm.savingWithNIR))}` : 'Endnu intet',
+        auto: 'Leadscoren opdateres for hver beregner. Behovene bliver til tags på leadet.' },
+      { id: 'plan', title: 'Plan', done: S.visited.includes(5),
+        know: Object.keys(S.interests).filter((k) => S.interests[k]).map((k) => ({ plan: 'avlsplan', test: 'genomisk test', climate: 'klima', nir: 'NIR' })[k]).join(', ') || 'Ingen interesser valgt',
+        auto: 'Planen kan gemmes som link eller PDF, så landmanden kan vende tilbage.' },
+      { id: 'book', title: 'Booking', done: booked,
+        know: L.adv ? `${L.adv.title}${slot ? ` · ${EN.fmtDate(slot.date)} kl. ${slot.time}` : S.booking.type === 'callback' ? ' · ønsker opkald' : ''}` : 'Postnummer mangler',
+        auto: 'Rådgiver tildeles ud fra postnummer. Tiden låses i rådgiverens kalender.' },
+      { id: 'lead', title: 'Lead sendt', done: S.submitted,
+        know: S.submitted ? `${S.contact.name} · samtykke givet${S.contact.mailOptIn ? ' · ja til opfølgning' : ''}` : 'Ikke sendt endnu',
+        auto: 'Planmail og kalenderinvitation til landmanden. Leadkort til rådgiveren. Data til CRM.' },
+      { id: 'nurture', title: 'Opfølgning', done: S.submitted && S.contact.mailOptIn,
+        know: S.submitted ? `${nMails} ${nMails === 1 ? 'mail' : 'mails'} planlagt` : '–',
+        auto: 'Mails tilpasset resultaterne, fx kvieunderskud, genomisk test, tørstof op til ensilering og klima.' },
+      { id: 'meeting', title: 'Møde', future: true, know: 'Rådgiveren møder op med beregningerne',
+        auto: 'Tallene kalibreres med bedriftens egne priser og data.' },
+      { id: 'sale', title: 'Tilbud / køb', future: true, know: 'Sædpakke, genomiske test, NIR',
+        auto: 'Planen kan blive til et færdigt tilbud eller en kurv i VikShop.' },
+    ];
+    const cur = st.findIndex((x) => !x.done && !x.future);
+    return { stages: st, current: cur === -1 ? st.findIndex((x) => x.future) : cur, score: L.ls };
+  }
+
+  function renderJourney() {
+    const el = $('#journey');
+    if (!el) return;
+    el.hidden = !S.ui.journey;
+    document.body.classList.toggle('has-journey', !!S.ui.journey);
+    const jb = $('#toggleJourney'); if (jb) jb.setAttribute('aria-pressed', !!S.ui.journey);
+    if (!S.ui.journey) return;
+    const R = results();
+    const { stages, current, score } = journeyStages(R);
+    const sel = S.ui.journeyStage != null ? S.ui.journeyStage : current;
+    const st = stages[sel];
+    el.innerHTML = `<div class="journey-inner">
+      <div class="journey-head">
+        <div><span class="eyebrow">Kunderejsen</span> <b>Trin ${current + 1} af ${stages.length}: ${esc(stages[current].title)}</b></div>
+        <div class="journey-score"><span class="small muted">Leadscore</span><div class="meter"><span style="width:${score.score}%"></span></div><b>${score.score}</b><span class="tag ${score.tier === 'Varm' ? 'hot' : score.tier === 'Lun' ? 'warm' : ''}">${score.tier}</span></div>
+        <button class="iconbtn" data-action="journey-close" aria-label="Skjul kunderejsen">✕</button>
+      </div>
+      <ol class="journey-steps">${stages.map((x, i) => `<li><button type="button" data-action="journey-stage" data-i="${i}" class="js ${x.done ? 'done' : ''} ${x.future ? 'future' : ''} ${i === current ? 'current' : ''}" aria-pressed="${i === sel}"><span class="dot">${x.done ? '✓' : i + 1}</span><span class="t">${esc(x.title)}${x.progress ? ` <small>${x.progress}</small>` : ''}</span></button></li>`).join('')}</ol>
+      <div class="journey-detail"><div><span class="k">VikingDanmark ved nu</span><span>${esc(st.know)}</span></div><div><span class="k">Det sker automatisk</span><span>${esc(st.auto)}</span></div></div>
+    </div>`;
+  }
+
+  function readEntryParams() {
+    const q = new URLSearchParams(location.search);
+    const src = q.get('kilde'), start = q.get('start'), demo = q.get('demo');
+    if (demo && PERSONAS[demo]) { loadPersona(demo); return true; }
+    if (src) S.source = src;
+    if (start && START_STEPS[start] != null) { S.step = START_STEPS[start]; return true; }
+    return false;
+  }
+
   // ---------------------------------------------------------------- navigation
   const STEPS = [
     { title: 'Besætningstjek', render: renderQuiz },
@@ -839,6 +990,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     const st = STEPS[S.step];
     if (st.results) { const el = $('#results'); if (el) el.innerHTML = st.results(results()); }
     renderSide();
+    renderJourney();
     save();
   }
 
@@ -864,6 +1016,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       const lab = document.querySelector(`[data-val-for="${t.dataset.path}"]`);
       if (lab) lab.textContent = `${num(+t.value, +t.dataset.dec)}${t.dataset.unit ? ' ' + t.dataset.unit : ''}`;
       if (t.dataset.path === 'herd.cows') S.dm.cows = v;
+      if (t.type === 'range' && t.closest('#results')) { renderSide(); save(); return; } // gentegnes ved 'change'
       update();
       return;
     }
@@ -893,10 +1046,16 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     }
   });
 
+  document.addEventListener('toggle', (e) => {
+    const d = e.target;
+    if (d.dataset && d.dataset.keep) { S.ui.open[d.dataset.keep] = d.open; save(); }
+  }, true);
+
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset.interest) { S.interests[t.dataset.interest] = t.checked; renderLeadCard(results()); save(); }
     if (t.dataset.action === 'lasting') { S.lasting = t.checked; update(); }
+    if (t.dataset.path && t.type === 'range' && t.closest('#results')) update();
     if (t.dataset.booking) { S.booking[t.dataset.booking] = t.value; renderLeadCard(results()); save(); }
   });
 
@@ -921,9 +1080,13 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       if (S.originalStrategy) S.strategy = deep(S.originalStrategy);
       S.originalStrategy = null;
       go(1);
-    } else if (a === 'breed') { S.breed = b.dataset.value; S.genomic.krPerNTMYear = C.NTM_VALUE_BY_BREED[S.breed]; go(2); }
+    } else if (a === 'breed') { S.breed = b.dataset.value; S.genomic.krPerNTMYear = C.NTM_VALUE_BY_BREED[S.breed]; S.arla.milkKgPerCow = MILK_BY_BREED[S.breed]; go(2); }
     else if (a === 'dm-method') { S.dm.method = b.dataset.value; b.parentElement.querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', o === b)); update(); }
     else if (a === 'print') window.print();
+    else if (a === 'journey-toggle' || a === 'journey-close') { S.ui.journey = a === 'journey-toggle' ? !S.ui.journey : false; S.ui.journeyStage = null; renderJourney(); save(); }
+    else if (a === 'journey-stage') { const i = +b.dataset.i; S.ui.journeyStage = S.ui.journeyStage === i ? null : i; renderJourney(); }
+    else if (a === 'persona') { $('#demoMenu').open = false; loadPersona(b.dataset.value); }
+    else if (a === 'entry-news') { $('#demoMenu').open = false; S.source = 'nyhed-klimapoint'; toast('Simuleret indgang: nyheden om klimapoint for genomisk test'); go(2); }
     else if (a === 'book-type') { S.booking.type = b.dataset.value; if (S.booking.slot && S.booking.slot.type !== S.booking.type) S.booking.slot = null; $('#bookingBody').innerHTML = bookingBody(); refreshSubmitLabel(); renderLeadCard(results()); save(); }
     else if (a === 'book-slot') { S.booking.slot = { date: b.dataset.date, time: b.dataset.time, type: S.booking.type }; $('#bookingBody').innerHTML = bookingBody(); refreshSubmitLabel(); renderLeadCard(results()); save(); }
     else if (a === 'goto-book') { go(5); setTimeout(() => { const el = $('#booking'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60); }
@@ -931,7 +1094,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
     else if (a === 'copy-link') copyPlanLink();
     else if (a === 'preview-mail') previewMail(b.dataset.id);
     else if (a === 'edit-plan') { S.submitted = false; go(5); }
-    else if (a === 'reset') { S = initial(); save(); go(0); }
+    else if (a === 'reset') { const ui = S.ui; S = initial(); S.ui = { ...ui, open: {} }; save(); go(0); }
   });
 
   function quizNext() {
@@ -1015,6 +1178,7 @@ overfodring (½ tid)      = afvigelse × foderpris × spild</div>
       history.replaceState(null, '', baseUrl());
     }
   }
+  if (!m) readEntryParams();
   go(S.step || 0);
   S.restored = false;
   save();

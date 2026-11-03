@@ -341,3 +341,54 @@ input[type="range"]::-moz-range-progress { height: 4px; background: var(--brand)
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand); cursor: pointer; }
 input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand); cursor: pointer; }
 .foot .linkbtn { display: block; width: 100%; max-width: 1208px; text-align: left; }
+
+/* Topbjælke: demo-menu og kunderejse-knap */
+.top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.demo-menu { position: relative; }
+.demo-menu summary, .journey-btn { list-style: none; cursor: pointer; font: inherit; font-size: .85rem; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); white-space: nowrap; }
+.demo-menu summary::-webkit-details-marker { display: none; }
+.demo-menu summary::after { content: " ▾"; color: var(--brand); }
+.journey-btn[aria-pressed="true"] { background: var(--petrol); border-color: var(--petrol); color: #fff; }
+.demo-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line); padding: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+.demo-list button { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 6px; cursor: pointer; color: var(--ink); }
+.demo-list button:hover { background: var(--brand-soft); }
+.demo-list button span { display: block; font-size: .8rem; color: var(--muted); }
+.demo-list hr { border: 0; margin: 6px 0; }
+@media (max-width: 640px) { .proto-badge { display: none; } .demo-list { right: auto; left: 0; } }
+
+/* Kunderejse-panel */
+.journey { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; background: var(--surface); border-top: 3px solid var(--brand); box-shadow: 0 -8px 28px rgba(0,0,0,.10); }
+.journey[hidden] { display: none; }
+body.has-journey { padding-bottom: 210px; }
+.journey-inner { max-width: 1240px; margin: 0 auto; padding: 10px 16px 12px; }
+.journey-head { display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
+.journey-head .eyebrow { margin-right: 6px; }
+.journey-score { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.journey-score .meter { width: 120px; }
+.journey-steps { list-style: none; margin: 10px 0 8px; padding: 0; display: flex; gap: 4px; overflow-x: auto; }
+.journey-steps li { flex: 1 0 auto; }
+.journey-steps .js { width: 100%; display: flex; align-items: center; gap: 6px; font: inherit; font-size: .8rem; padding: 7px 8px; background: var(--surface-2); border: 0; border-top: 3px solid var(--line); cursor: pointer; color: var(--ink-2); text-align: left; white-space: nowrap; }
+.journey-steps .js .dot { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--surface); font-size: .7rem; font-weight: 600; }
+.journey-steps .js.done { border-top-color: var(--brand); color: var(--ink); }
+.journey-steps .js.done .dot { background: var(--brand); color: #fff; }
+.journey-steps .js.current { border-top-color: var(--petrol); background: var(--brand-soft); color: var(--ink); font-weight: 600; }
+.journey-steps .js.current .dot { background: var(--petrol); color: #fff; }
+.journey-steps .js.future { opacity: .65; border-top-style: dashed; }
+.journey-steps .js[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: -2px; }
+.journey-steps small { color: var(--muted); font-weight: 400; }
+.journey-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: .88rem; }
+.journey-detail .k { display: block; text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; color: var(--muted); margin-bottom: 2px; }
+@media (max-width: 760px) { .journey-detail { grid-template-columns: 1fr; gap: 6px; } body.has-journey { padding-bottom: 260px; } .journey-score .meter { width: 70px; } }
+
+/* "Hvem skal have kønssorteret?" */
+.strip { margin: 14px 0; }
+.strip-head { display: flex; justify-content: space-between; font-size: .92rem; margin-bottom: 6px; }
+.strip-head span { color: var(--brand-text); font-weight: 600; }
+.calves { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; position: relative; }
+.calves::after { content: ""; position: absolute; top: -4px; bottom: -4px; left: calc(var(--k) / 20 * 100% - 1.5px); border-left: 2px dashed var(--ink); }
+.calf { display: grid; place-items: center; aspect-ratio: 1; min-height: 22px; font-size: .72rem; font-variant-numeric: tabular-nums; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); cursor: default; }
+.calf.sel { background: var(--brand); color: #fff; border-color: var(--brand); }
+.calf.sel.wrong { background: repeating-linear-gradient(45deg, var(--brand), var(--brand) 4px, #5fbfe8 4px, #5fbfe8 8px); }
+.calf.miss { background: var(--bad-soft); color: var(--bad); border: 2px solid var(--bad); font-weight: 700; }
+.calf.inline { display: inline-block; width: 14px; height: 14px; min-height: 0; aspect-ratio: auto; vertical-align: -2px; margin: 0 2px; }
+@media (max-width: 560px) { .calves { grid-template-columns: repeat(10, minmax(0, 1fr)); } .calves::after { display: none; } }

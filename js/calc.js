@@ -391,10 +391,90 @@
     return { score, tier, parts: { size, need, eng } };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // 2b) "Hvem skal have kønssorteret?" – klassificering med og uden test
+  // ---------------------------------------------------------------------------
+  /** Deterministisk RNG (mulberry32), så eksempler er ens hver gang. */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /**
+   * Simulerer n kviekalve: sand avlsværdi (NTM) og to skøn med korrelation
+   * rPA (afstamning) og rG (genomisk) til den sande værdi.
+   *   skøn = r·sand + √(1−r²)·σ·støj   ⇒  corr(skøn, sand) = r
+   */
+  function simulateCalves(n, rPA, rG, sd, seed) {
+    const rng = mulberry32(seed);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const t = gauss(rng) * sd;
+      const pa = rPA * t + Math.sqrt(1 - rPA * rPA) * sd * gauss(rng);
+      const g = rG * t + Math.sqrt(1 - rG * rG) * sd * gauss(rng);
+      out.push({ id: i + 1, true: t, pa, g });
+    }
+    return out;
+  }
+  const topK = (calves, key, k) => new Set([...calves].sort((a, b) => b[key] - a[key]).slice(0, k).map((c) => c.id));
+  const meanOf = (calves, ids) => { let s = 0; for (const c of calves) if (ids.has(c.id)) s += c.true; return ids.size ? s / ids.size : 0; };
+
+  /** Klassificér én flok: hvem får kønssorteret (top k) med hvert skøn, og hvor mange er rigtige. */
+  function classifyHerd(calves, k) {
+    const truth = topK(calves, 'true', k), pa = topK(calves, 'pa', k), g = topK(calves, 'g', k);
+    const hits = (set) => [...set].filter((id) => truth.has(id)).length;
+    return { truth, pa, g, hitsPA: hits(pa), hitsG: hits(g), meanPA: meanOf(calves, pa), meanG: meanOf(calves, g), meanTrue: meanOf(calves, truth) };
+  }
+
+  /**
+   * Forventet andel rigtige valg og NTM-niveau blandt de valgte, gennemsnit over mange flokke.
+   * Returnerer også et repræsentativt eksempel (den flok der ligger tættest på gennemsnittet).
+   */
+  function selectionAccuracy({ n = 20, share = 0.5, rPA = 0.55, rG = 0.80, sd = 10, sims = 2000, seed = 7 } = {}) {
+    const k = Math.max(1, Math.min(n - 1, Math.round(n * share)));
+    let hPA = 0, hG = 0, mPA = 0, mG = 0;
+    for (let i = 0; i < sims; i++) {
+      const r = classifyHerd(simulateCalves(n, rPA, rG, sd, seed + i), k);
+      hPA += r.hitsPA; hG += r.hitsG; mPA += r.meanPA; mG += r.meanG;
+    }
+    const res = { n, k, hitsPA: hPA / sims, hitsG: hG / sims, meanPA: mPA / sims, meanG: mG / sims };
+    // repræsentativt eksempel
+    let best = null;
+    for (let s = 1000; s < 1300; s++) {
+      const calves = simulateCalves(n, rPA, rG, sd, s);
+      const r = classifyHerd(calves, k);
+      const dist = Math.abs(r.hitsPA - res.hitsPA) + Math.abs(r.hitsG - res.hitsG);
+      if (!best || dist < best.dist) best = { dist, seed: s, calves, ...r };
+    }
+    res.example = best;
+    return res;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2c) Arla klimapoint for genomisk test (sats indtastes af brugeren)
+  // ---------------------------------------------------------------------------
+  /** Årlig værdi = årskøer × leveret mælk pr. ko × sats (øre/kg) ÷ 100. */
+  function arlaClimateValue({ cows, milkKgPerCow, oerePerKg }) {
+    if (!(oerePerKg > 0) || !(milkKgPerCow > 0) || !(cows > 0)) return 0;
+    return cows * milkKgPerCow * oerePerKg / 100;
+  }
+
   const api = {
     DEFAULTS, GENOMIC_DEFAULTS, NTM_VALUE_BY_BREED, CLIMATE_DEFAULTS, DRYMATTER_DEFAULTS, MEASURE_METHODS,
     heiferBalance, recommendStrategy, heiferBreakEven,
     invNorm, selectionIntensity, genomicValue, genomicScenario, genomicOptimum,
+    mulberry32, simulateCalves, classifyHerd, selectionAccuracy, arlaClimateValue,
     taxRateNominal, breedingEffect, climateProjection,
     dryMatterCost, dryMatterComparison, leadScore, clamp,
   };

@@ -34,7 +34,7 @@
     buffer: D.buffer,
     genomic: deep(C.GENOMIC_DEFAULTS),
     genBuffer: 0,
-    arla: { oerePerKg: 0, milkKgPerCow: 11000 },
+    arla: { points: 0, milkKgPerCow: 11000 },
     ui: { open: {}, journey: false },
     source: null,
     lasting: false,
@@ -50,7 +50,8 @@
   });
   let S;
   try { S = Object.assign(initial(), JSON.parse(localStorage.getItem(KEY) || 'null') || {}); } catch (e) { S = initial(); }
-  if (!S.arla) S.arla = { oerePerKg: 0, milkKgPerCow: 11000 };
+  if (!S.arla) S.arla = { points: 0, milkKgPerCow: 11000 };
+  if (S.arla.points == null) S.arla.points = 0;
   if (!S.ui || !S.ui.open) S.ui = { open: {}, journey: false };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignorer */ } };
 
@@ -70,7 +71,7 @@
     // Udgangspunkt: brugerens oprindelige strategi, også efter de har valgt anbefalingen
     const orig = S.originalStrategy ? C.heiferBalance(S.herd, S.originalStrategy, S.biology, S.prices) : cur;
     const potential = rec.net - orig.net;
-    const arla = C.arlaClimateValue({ cows: S.herd.cows, ...S.arla });
+    const arla = C.arlaClimateValue({ cows: S.herd.cows, milkKgPerCow: S.arla.milkKgPerCow, oerePerKg: C.arlaOereFromPoints(S.arla.points) });
     const genNet = gs.genomic.net + arla;
     return { cur, rec, recInfo, gs, gopt, g, clim, dm, orig, potential, arla, genNet };
   }
@@ -353,9 +354,9 @@ netto           = kalvesalg + kvieoverskud/-underskud − sæd og ins.</div>
           <div class="seg" role="group" aria-label="Race">${breeds.map(([k, t]) => `<button data-action="breed" data-value="${k}" aria-pressed="${S.breed === k}">${t}</button>`).join('')}</div></div>
         ${slider({ path: 'genomic.testPrice', label: 'Pris pr. test', min: 100, max: 400, step: 10, unit: 'kr.' })}
         <h3 style="margin-top:18px">Arla klimapoint for genomisk test</h3>
-        <p class="small muted">Fra 1. januar 2027 kan genomisk test give klimapoint hos Arla. Skriv tillægget ind, når satsen er kendt. Står den på 0, regnes der ikke med den.</p>
+        <p class="small muted">Fra 1. januar 2027 er ét point i Arlas FarmAhead-tillæg 0,04 eurocent pr. kg mælk (ca. ${num(C.arlaOereFromPoints(1), 2)} øre). Skriv, hvor mange point genomisk test giver. Antallet er ikke offentliggjort endnu. Står det på 0, regnes der ikke med det.</p>
         <div class="grid-2">
-          ${numberField({ path: 'arla.oerePerKg', label: 'Tillæg', unit: 'øre pr. kg mælk', step: 0.1 })}
+          ${numberField({ path: 'arla.points', label: 'Point for genomisk test', unit: 'point', step: 1 })}
           ${numberField({ path: 'arla.milkKgPerCow', label: 'Leveret mælk', unit: 'kg pr. årsko', step: 100 })}
         </div>
         ${learn('Avancerede antagelser', `
@@ -396,14 +397,15 @@ netto           = kalvesalg + kvieoverskud/-underskud − sæd og ins.</div>
     const acc = accuracy(share);
     const ex = acc.example;
     const k = acc.k;
-    const arla = C.arlaClimateValue({ cows: S.herd.cows, ...S.arla });
+    const arla = R.arla;
     const net = gv.value + arla - gv.cost;
     const milkTotal = S.herd.cows * S.arla.milkKgPerCow;
     const needOere = milkTotal > 0 ? Math.max(0, (gv.cost - gv.value) / milkTotal * 100) : 0;
+    const needPoints = needOere / C.arlaOereFromPoints(1);
     const wrongPA = k - Math.round(acc.hitsPA), wrongG = k - Math.round(acc.hitsG);
     let msg;
     if (net >= 0) msg = `<div class="callout good"><b>Testen tjener sig hjem${arla > 0 ? ' med Arla-tillægget' : ''}:</b> ${krS(net)} om året efter testudgiften.</div>`;
-    else msg = `<div class="callout"><b>Avlsfremgangen dækker ${pct(gv.value / Math.max(1, gv.cost))} af testprisen.</b> ${arla > 0 ? 'Med det indtastede Arla-tillæg mangler der stadig ' + kr(-net) + ' om året.' : `Arla-tillægget skal være mindst <b>${num(needOere, 2)} øre pr. kg mælk</b>, før testen tjener sig hjem med dine tal.`} Fordelene, der ikke er regnet med, kommer oveni.</div>`;
+    else msg = `<div class="callout"><b>Avlsfremgangen dækker ${pct(gv.value / Math.max(1, gv.cost))} af testprisen.</b> ${arla > 0 ? 'Med det indtastede Arla-tillæg mangler der stadig ' + kr(-net) + ' om året.' : `Med Arlas pointværdi skal genomisk test give mindst <b>${num(Math.ceil(needPoints * 10) / 10, 1)} ${needPoints <= 1 ? 'point' : 'point'}</b> (${num(needOere, 2)} øre pr. kg mælk), før testen tjener sig hjem med dine tal.`} Fordelene, der ikke er regnet med, kommer oveni.</div>`;
     const pts = gopt.points;
     return `<section class="card">
       <h2>${num(k)} ud af 20 skal have kønssorteret. Hvem vælger du?</h2>
@@ -421,14 +423,14 @@ netto           = kalvesalg + kvieoverskud/-underskud − sæd og ins.</div>
       <h2>Hvad er det værd for dig?</h2>
       <div class="grid-4">
         ${stat('Avlsfremgang', kr(gv.value), 'pr. år')}
-        ${stat('Arla klimapoint', arla > 0 ? kr(arla) : '–', arla > 0 ? `${num(S.arla.oerePerKg, 2)} øre/kg` : 'indtast sats nedenfor')}
+        ${stat('Arla klimapoint', arla > 0 ? kr(arla) : '–', arla > 0 ? `${num(S.arla.points)} point = ${num(C.arlaOereFromPoints(S.arla.points), 2)} øre/kg` : 'indtast antal point nedenfor')}
         ${stat('Testudgift', '−' + kr(gv.cost), `${num(gv.tested)} kalve × ${kr(S.genomic.testPrice)}`)}
         ${stat('Netto', krS(net), 'pr. år', net >= 0 ? 'good' : 'bad')}
       </div>
       ${msg}
       ${learn('Sådan regner beregneren', `<div class="formula">rigtige valg    = simulering: sand avlsværdi vs. skøn med sikkerhed r (uden test ${num(S.genomic.accParentAverage, 2)}, med test ${num(S.genomic.accGenomic, 2)})
 avlsfremgang    = bedre mødre (½ arves) + bedre udvalg af kvier × ${kr(S.genomic.krPerNTMYear)} pr. NTM pr. årsko × ${num(S.genomic.productiveYears, 1)} år
-Arla klimapoint = årskøer × kg mælk pr. ko × øre pr. kg ÷ 100
+Arla klimapoint = årskøer × kg mælk pr. ko × point × 0,04 eurocent × 7,46
 netto           = avlsfremgang + klimapoint − antal testede kalve × testpris</div>
         <h3 style="margin-top:14px">Kan det betale sig at lave ekstra kviekalve at vælge imellem?</h3>
         ${CH.lines({

@@ -464,6 +464,12 @@
   // ---------------------------------------------------------------------------
   // 2c) Arla klimapoint for genomisk test (sats indtastes af brugeren)
   // ---------------------------------------------------------------------------
+  // Arla FarmAhead-tillæg fra 1. januar 2027: 0,04 eurocent pr. kg mælk pr. point (pressemeddelelse okt. 2026)
+  const ARLA_EUROCENT_PER_POINT = 0.04;
+  const EUR_DKK = 7.46;
+  /** Øre pr. kg mælk for et antal point (1 eurocent = 7,46 øre). */
+  const arlaOereFromPoints = (points) => (points > 0 ? points * ARLA_EUROCENT_PER_POINT * EUR_DKK : 0);
+
   /** Årlig værdi = årskøer × leveret mælk pr. ko × sats (øre/kg) ÷ 100. */
   function arlaClimateValue({ cows, milkKgPerCow, oerePerKg }) {
     if (!(oerePerKg > 0) || !(milkKgPerCow > 0) || !(cows > 0)) return 0;
@@ -474,7 +480,7 @@
     DEFAULTS, GENOMIC_DEFAULTS, NTM_VALUE_BY_BREED, CLIMATE_DEFAULTS, DRYMATTER_DEFAULTS, MEASURE_METHODS,
     heiferBalance, recommendStrategy, heiferBreakEven,
     invNorm, selectionIntensity, genomicValue, genomicScenario, genomicOptimum,
-    mulberry32, simulateCalves, classifyHerd, selectionAccuracy, arlaClimateValue,
+    mulberry32, simulateCalves, classifyHerd, selectionAccuracy, arlaClimateValue, arlaOereFromPoints, ARLA_EUROCENT_PER_POINT, EUR_DKK,
     taxRateNominal, breedingEffect, climateProjection,
     dryMatterCost, dryMatterComparison, leadScore, clamp,
   };

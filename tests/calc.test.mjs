@@ -175,3 +175,11 @@ test('Arla klimapoint: øre pr. kg × mælk × køer', () => {
   assert.equal(C.arlaClimateValue({ cows: 250, milkKgPerCow: 10000, oerePerKg: 0 }), 0);
   assert.equal(C.arlaClimateValue({ cows: 250, milkKgPerCow: 10000, oerePerKg: NaN }), 0);
 });
+
+test('Arla-point omregnes med 0,04 eurocent pr. point', () => {
+  close(C.arlaOereFromPoints(1), 0.2984, 1e-9);
+  close(C.arlaOereFromPoints(3), 0.8952, 1e-9);
+  assert.equal(C.arlaOereFromPoints(0), 0);
+  // 250 køer × 11.000 kg × 1 point ≈ 8.206 kr./år
+  close(C.arlaClimateValue({ cows: 250, milkKgPerCow: 11000, oerePerKg: C.arlaOereFromPoints(1) }), 8206, 1);
+});

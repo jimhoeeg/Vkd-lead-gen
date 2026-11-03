@@ -48,7 +48,7 @@ Resultat med standardværdierne: Avlsfremgangen dækker ca. 97 % af testprisen, 
 
 ### 2c. Arla klimapoint (`arlaClimateValue`)
 
-Værdi pr. år = årskøer × leveret mælk pr. ko (kg) × tillæg (øre/kg) ÷ 100. Satsen indtastes af brugeren, fordi den ikke er kendt endnu. Ved 0 regnes der ikke med den. Beregneren viser også, hvor højt tillægget mindst skal være, før testen tjener sig hjem: `(testudgift − avlsværdi) ÷ (køer × kg mælk) × 100`. Standardværdier for mælk pr. ko efter race: Holstein 11.000, RDM 10.000, Jersey 8.000 og krydsning 10.000 kg (eksempler).
+Fra 1. januar 2027 er ét point i Arlas FarmAhead-tillæg 0,04 eurocent pr. kg mælk, ca. 0,30 øre ved 7,46 kr./€ ([Arla, okt. 2026](https://www.arla.com/company/news-and-press/2026/pressrelease/arla-expands-climate-action-programme-to-accelerate-progress-on-farms/)). Avl er et af seks nye indsatsområder, men **antallet af point for genomisk test er ikke offentliggjort**. Brugeren indtaster det derfor. Værdi pr. år = årskøer × kg mælk pr. ko × point × 0,04 × 7,46 ÷ 100 kr. Beregneren viser også, hvor mange point der mindst skal til, før testen tjener sig hjem. Standardværdier for mælk pr. ko efter race: Holstein 11.000, RDM 10.000, Jersey 8.000 og krydsning 10.000 kg (eksempler).
 
 ## 3. Klima og foder via avl (`climateProjection`)
 

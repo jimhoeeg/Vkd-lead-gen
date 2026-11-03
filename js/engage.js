@@ -215,20 +215,20 @@
   const krS = (v) => `${v > 0.5 ? '+' : v < -0.5 ? '−' : ''}${nf(Math.abs(v))} kr.`;
   const fmtDate = (date) => new Intl.DateTimeFormat('da-DK', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z'));
 
-  const BRAND = { color: '#1d4a3a', soft: '#e1ece5', ink: '#15201b', muted: '#6c716c', bg: '#f4f2ec' };
+  const BRAND = { color: '#034b69', button: '#0094d4', soft: '#e6f4fb', ink: '#222222', muted: '#6b6b6b', bg: '#f2f2f2' };
 
   function shell(title, preheader, inner, ctx) {
     return `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${e(title)}</title></head>
 <body style="margin:0;padding:0;background:${BRAND.bg};font-family:Arial,Helvetica,sans-serif;color:${BRAND.ink}">
 <div style="display:none;max-height:0;overflow:hidden">${e(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.bg}"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff">
 <tr><td style="background:${BRAND.color};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold">Avlsværktøjet</td></tr>
 <tr><td style="padding:24px;font-size:15px;line-height:1.55">${inner}</td></tr>
 <tr><td style="padding:16px 24px;font-size:12px;color:${BRAND.muted};border-top:1px solid #eee">Du får denne mail, fordi du har brugt Avlsværktøjet${ctx.mailOptIn ? ' og sagt ja til opfølgning' : ''}. <a href="${e(ctx.unsubscribeUrl || '#')}" style="color:${BRAND.muted}">Afmeld</a>.</td></tr>
 </table></td></tr></table></body></html>`;
   }
-  const btn = (href, label) => `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0"><tr><td style="background:${BRAND.color};border-radius:8px"><a href="${e(href)}" style="display:inline-block;padding:12px 20px;color:#ffffff;text-decoration:none;font-weight:bold">${e(label)}</a></td></tr></table>`;
+  const btn = (href, label) => `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0"><tr><td style="background:${BRAND.button};border-radius:999px"><a href="${e(href)}" style="display:inline-block;padding:13px 26px;color:#ffffff;text-decoration:none;font-weight:bold;border-radius:999px">${e(label)}</a></td></tr></table>`;
   const kv = (rows) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0;border-collapse:collapse">${rows.map(([k, v]) => `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${e(k)}</td><td align="right" style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold">${e(v)}</td></tr>`).join('')}</table>`;
 
   function renderEmail(id, ctx) {

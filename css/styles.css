@@ -1,57 +1,50 @@
+/* VikingDanmark CVI: lyseblå primær, petrol sekundær, lysegrå flader, flade hvide kort, pilleknapper */
 :root {
   color-scheme: light;
-  --bg: #f4f2ec;
-  --surface: #fcfcfb;
-  --surface-2: #efede6;
-  --ink: #15201b;
-  --ink-2: #4b524d;
-  --muted: #6c716c;
-  --line: #dcd9cf;
-  --brand: #1d4a3a;
+  --bg: #f2f2f2;
+  --surface: #ffffff;
+  --surface-2: #f4f4f4;
+  --ink: #222222;
+  --ink-2: #474747;
+  --muted: #6b6b6b;
+  --line: #dadada;
+  --brand: #0094d4;          /* VikingDanmark blå: knapper, ikoner, pile */
+  --brand-text: #0077ad;     /* blå til mindre tekst (AA-kontrast) */
   --brand-ink: #ffffff;
-  --brand-soft: #e1ece5;
-  --accent: #c98a1b;
-  --accent-soft: #f6ead2;
+  --brand-soft: #e6f4fb;
+  --petrol: #034b69;         /* footer / mørke flader */
+  --petrol-ink: #ffffff;
+  --accent: #0094d4;
+  --accent-soft: #e6f4fb;
   --good: #1f7a4a;
-  --good-soft: #e0f1e6;
+  --good-soft: #e3f2e8;
   --bad: #b3372f;
-  --bad-soft: #f8e3e0;
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --grid: #e5e3db;
-  --shadow: 0 1px 2px rgba(20, 30, 25, .06), 0 6px 20px rgba(20, 30, 25, .06);
-  --radius: 14px;
+  --bad-soft: #f9e5e2;
+  --series-1: #e8a317;       /* i dag / uden */
+  --series-2: #0094d4;       /* anbefalet / med avl */
+  --grid: #e6e6e6;
+  --shadow: none;
+  --radius: 0px;
+  --radius-sm: 4px;
+  --font-head: "Inter Tight", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #121614;
-    --surface: #1a1f1c;
-    --surface-2: #222824;
-    --ink: #eef0ec;
-    --ink-2: #c3c8c2;
-    --muted: #9aa19b;
-    --line: #333a35;
-    --brand: #6fbf98;
-    --brand-ink: #0d1a14;
-    --brand-soft: #1f3329;
-    --accent: #e3a83c;
-    --accent-soft: #3a2f1a;
-    --good: #5cc28a;
-    --good-soft: #1d3326;
-    --bad: #ef7d73;
-    --bad-soft: #3b2220;
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --grid: #2b312d;
-    --shadow: none;
+    --bg: #0d171c; --surface: #13222a; --surface-2: #1a2c35; --ink: #eef2f4; --ink-2: #c3cdd2; --muted: #93a2aa;
+    --line: #2a3d47; --brand: #2f9fd8; --brand-text: #6cc3ee; --brand-ink: #ffffff; --brand-soft: #12344a;
+    --petrol: #06374d; --petrol-ink: #ffffff; --accent: #2f9fd8; --accent-soft: #12344a;
+    --good: #5cc28a; --good-soft: #17322a; --bad: #ef7d73; --bad-soft: #3b2220;
+    --series-1: #c98500; --series-2: #2f9fd8; --grid: #22343e; --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #121614; --surface: #1a1f1c; --surface-2: #222824; --ink: #eef0ec; --ink-2: #c3c8c2; --muted: #9aa19b;
-  --line: #333a35; --brand: #6fbf98; --brand-ink: #0d1a14; --brand-soft: #1f3329; --accent: #e3a83c; --accent-soft: #3a2f1a;
-  --good: #5cc28a; --good-soft: #1d3326; --bad: #ef7d73; --bad-soft: #3b2220; --series-1: #3987e5; --series-2: #d95926; --grid: #2b312d; --shadow: none;
+  --bg: #0d171c; --surface: #13222a; --surface-2: #1a2c35; --ink: #eef2f4; --ink-2: #c3cdd2; --muted: #93a2aa;
+  --line: #2a3d47; --brand: #2f9fd8; --brand-text: #6cc3ee; --brand-ink: #ffffff; --brand-soft: #12344a;
+  --petrol: #06374d; --petrol-ink: #ffffff; --accent: #2f9fd8; --accent-soft: #12344a;
+  --good: #5cc28a; --good-soft: #17322a; --bad: #ef7d73; --bad-soft: #3b2220;
+  --series-1: #c98500; --series-2: #2f9fd8; --grid: #22343e; --shadow: none;
 }
 
 * { box-sizing: border-box; }
@@ -60,12 +53,12 @@ body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 16px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-h1, h2, h3 { font-family: Fraunces, Georgia, serif; line-height: 1.2; margin: 0 0 .4em; letter-spacing: -.01em; }
+h1, h2, h3 { font-family: var(--font-head); font-weight: 600; line-height: 1.15; margin: 0 0 .45em; letter-spacing: -.025em; }
 h1 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); }
 h2 { font-size: 1.4rem; }
 h3 { font-size: 1.1rem; }
 p { margin: 0 0 .8em; }
-a { color: var(--brand); }
+a { color: var(--brand-text); }
 code { font-size: .9em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
 .muted { color: var(--muted); }
 .small { font-size: .875rem; }
@@ -77,7 +70,7 @@ code { font-size: .9em; background: var(--surface-2); padding: 1px 5px; border-r
 .topbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
 .topbar-inner { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { display: flex; gap: 10px; align-items: center; color: var(--brand); }
-.brand-name { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: 1.15rem; color: var(--ink); }
+.brand-name { font-weight: 600; color: var(--ink); }
 .brand-sub { font-size: .8rem; color: var(--muted); }
 .topbar-inner { flex-wrap: wrap; }
 @media (max-width: 520px) { .brand-sub { display: none; } .proto-badge { white-space: normal; } }
@@ -134,7 +127,7 @@ legend { font-weight: 600; margin-bottom: 6px; }
 .mixbar span { display: block; height: 100%; }
 .mix-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: .8rem; color: var(--ink-2); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-.c-sexed { background: #6250d6; } .c-conv { background: #9aa19b; } .c-beef { background: #a8552a; }
+.c-sexed { background: #0094d4; } .c-conv { background: #b8b8b8; } .c-beef { background: #034b69; }
 
 /* Buttons */
 .btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 11px 18px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
@@ -169,7 +162,7 @@ tr.total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom:
 .learn { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; background: var(--surface); margin: 10px 0; }
 .learn summary { cursor: pointer; padding: 11px 14px; font-weight: 600; list-style: none; display: flex; gap: 10px; align-items: center; }
 .learn summary::-webkit-details-marker { display: none; }
-.learn summary::before { content: "i"; flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-family: Fraunces, serif; font-weight: 700; }
+.learn summary::before { content: "i"; flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--brand-text); font-family: var(--font-head); font-weight: 700; }
 .learn[open] summary { border-bottom: 1px solid var(--line); }
 .learn .body { padding: 12px 14px; font-size: .93rem; color: var(--ink-2); }
 .learn .body p:last-child { margin-bottom: 0; }
@@ -255,5 +248,96 @@ tr.total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom:
 .modal { position: fixed; inset: 0; background: rgba(10, 15, 12, .5); z-index: 60; display: grid; place-items: center; padding: 16px; }
 .modal[hidden] { display: none; }
 .modal-panel { background: var(--surface); border-radius: var(--radius); width: min(720px, 100%); max-height: 92vh; display: flex; flex-direction: column; padding: 16px; }
-.modal-panel iframe { flex: 1; width: 100%; min-height: 60vh; border: 1px solid var(--line); border-radius: 10px; background: #f4f2ec; }
+.modal-panel iframe { flex: 1; width: 100%; min-height: 60vh; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #f2f2f2; }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; z-index: 70; font-size: .9rem; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
+
+
+/* ===================== VikingDanmark CVI-lag ===================== */
+:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { color: var(--brand); }
+.brand-name { font-family: var(--font-head); font-weight: 600; letter-spacing: -.02em; font-size: 1.2rem; }
+.proto-badge { background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; font-size: .68rem; }
+.stepper button { border-radius: 999px; border-color: var(--line); background: var(--surface); color: var(--ink); }
+.stepper button[aria-current="step"] { background: var(--petrol); border-color: var(--petrol); color: var(--petrol-ink); }
+.stepper button[aria-current="step"] .num { background: var(--brand); color: #fff; }
+.stepper button.done .num { background: var(--brand-soft); color: var(--brand-text); }
+
+.card, .side-card { border-radius: var(--radius); border: 0; box-shadow: none; }
+.hero { background: var(--petrol); color: var(--petrol-ink); padding: 32px 28px; }
+.hero .eyebrow { color: #8fd3f4; }
+.hero .lead { color: rgba(255,255,255,.88); }
+.hero .callout { color: var(--ink); }
+.hero .btn-ghost { color: #fff; border-color: rgba(255,255,255,.55); }
+.hero .btn-ghost:hover { background: rgba(255,255,255,.1); }
+.eyebrow { text-transform: uppercase; letter-spacing: .1em; font-size: .74rem; font-weight: 500; color: var(--muted); }
+h1 { font-size: clamp(1.75rem, 3.6vw, 2.5rem); }
+h2 { font-size: 1.45rem; }
+.field .val { color: var(--brand-text); }
+input[type="range"] { accent-color: var(--brand); }
+input[type="number"], input[type="text"], input[type="email"], input[type="tel"], select, textarea { border-radius: var(--radius-sm); border-color: #c9c9c9; }
+input:focus, select:focus, textarea:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 3px var(--brand-soft); }
+
+/* Knapper: pilleform som "Bestil inseminør" */
+.btn { border-radius: 999px; font-weight: 500; padding: 12px 24px; }
+.btn-primary { background: var(--brand); color: #fff; }
+.btn-primary:hover { filter: none; background: #0083bd; }
+.btn-ghost { border-color: var(--ink); color: var(--ink); }
+.linkbtn { color: var(--brand-text); }
+.iconbtn { border-radius: 999px; }
+
+/* Flader og bokse */
+.mix { border-radius: var(--radius-sm); background: var(--surface-2); border-color: transparent; }
+.stat { border-radius: 0; background: var(--surface-2); border-top: 3px solid var(--line); }
+.stat.good { border-top-color: var(--good); } .stat.bad { border-top-color: var(--bad); }
+.stat.hero-stat { background: var(--petrol); }
+.learn { border-radius: 0; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-left: 0; margin: 0; }
+.learn + .learn { border-top: 0; }
+.learn summary { padding: 14px 4px; font-weight: 500; }
+.learn summary::before { content: none; }
+.learn summary::after { content: "→"; margin-left: auto; color: var(--brand); font-size: 1.2rem; transition: transform .15s; }
+.learn[open] summary::after { transform: rotate(90deg); }
+.learn[open] summary { border-bottom: 0; }
+.learn .body { padding: 0 4px 14px; }
+.callout { border-radius: 0; border-left: 3px solid var(--brand); background: var(--brand-soft); }
+.callout.good { border-left-color: var(--good); } .callout.bad { border-left-color: var(--bad); }
+.option { border-radius: 0; border: 1px solid var(--line); }
+.option[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.option strong::after { content: " →"; color: var(--brand); }
+.seg { border-radius: 999px; border-color: var(--line); }
+.seg button[aria-pressed="true"] { background: var(--petrol); color: #fff; }
+.check { border-radius: 0; }
+.check input { accent-color: var(--brand); }
+.quiz-progress span, .meter span { background: var(--brand); }
+thead th { text-transform: uppercase; letter-spacing: .06em; font-size: .72rem; }
+tr.total td { border-top-color: var(--ink); }
+.formula { border-radius: 0; }
+.advisor { border-radius: 0; border: 0; background: var(--surface-2); }
+.avatar { background: var(--petrol); }
+.slot-day { border-radius: 0; }
+.slot { border-radius: 999px; }
+.slot[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); }
+.timeline .when { color: var(--brand-text); }
+.score-num { background: var(--brand-soft); color: var(--brand-text); }
+.tag { border-radius: 999px; }
+.leadcard { border-radius: 0; }
+.drawer-panel, .modal-panel { border-radius: 0; }
+.tooltip { border-radius: var(--radius-sm); background: var(--petrol); color: #fff; }
+.toast { background: var(--petrol); color: #fff; border-radius: 999px; }
+code { border-radius: 2px; }
+
+/* Footer i petrol som på vikingdanmark.dk */
+.foot { max-width: none; background: var(--petrol); color: rgba(255,255,255,.85); padding: 36px 16px 44px; margin-top: 8px; }
+.foot > * { max-width: 1208px; margin-left: auto; margin-right: auto; }
+.foot code { background: rgba(255,255,255,.12); color: #fff; }
+.foot .linkbtn { color: #fff; }
+.layout { padding-bottom: 32px; }
+
+/* Skydeknapper: tyndt gråt spor, blåt håndtag */
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 28px; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: var(--line); border-radius: 2px; }
+input[type="range"]::-moz-range-track { height: 4px; background: var(--line); border-radius: 2px; }
+input[type="range"]::-moz-range-progress { height: 4px; background: var(--brand); border-radius: 2px; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand); cursor: pointer; }
+input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand); cursor: pointer; }
+.foot .linkbtn { display: block; width: 100%; max-width: 1208px; text-align: left; }
